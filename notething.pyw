@@ -42,8 +42,8 @@ class Notepad:
         self.root.title("Notething")
 
         # Center the window on the screen
-        window_width = 600
-        window_height = 450  # Increased height for the window
+        window_width = 800
+        window_height = 500  # Increased height for the window
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         x = (screen_width // 2) - (window_width // 2)
