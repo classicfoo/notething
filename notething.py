@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from datetime import datetime  # Import datetime module
+import tkinter.font as tkFont  # Import tkinter font module
 
 class Tooltip:
     """Create a tooltip for a given widget."""
@@ -38,7 +39,7 @@ class Tooltip:
 class Notepad:
     def __init__(self, root):
         self.root = root
-        self.root.title("Notepad")
+        self.root.title("Notething")
 
         # Center the window on the screen
         window_width = 600
@@ -49,7 +50,9 @@ class Notepad:
         y = (screen_height // 2) - (window_height // 2)
         self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
 
-        self.text_area = tk.Text(self.root, wrap='word')
+        # Set a monospace font for the text area
+        self.font = tkFont.Font(family="Consolas", size=11)  # You can change the font family and size here
+        self.text_area = tk.Text(self.root, wrap='word', font=self.font, padx=10, pady=10)
         self.text_area.pack(expand=True, fill='both')
 
         # Add padding to the status bar
