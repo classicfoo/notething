@@ -68,6 +68,9 @@ class Notepad:
         self.create_menu()
         self.bind_hotkeys()
 
+        # Bind Ctrl + Backspace to delete the previous word
+        self.text_area.bind("<Control-BackSpace>", self.delete_previous_word)
+
     def create_menu(self):
         menu_bar = tk.Menu(self.root)
 
@@ -85,6 +88,29 @@ class Notepad:
         self.root.bind('<Control-n>', lambda event: self.new_file())
         self.root.bind('<Control-o>', lambda event: self.open_file())
         self.root.bind('<Control-s>', lambda event: self.save_file())
+
+    def delete_previous_word(self, event):
+        # Get the current cursor position
+        cursor_index = self.text_area.index(tk.INSERT)
+        # Get the text from the start to the cursor position
+        text = self.text_area.get("1.0", cursor_index)
+        
+        # Find the last space before cursor
+        last_space_index = text.rfind(" ")
+        
+        if last_space_index == -1:
+            # If no space found, delete everything up to cursor
+            self.text_area.delete("1.0", cursor_index)
+        else:
+            # Delete from after the last space up to cursor
+            # If the last character is a space, delete until beginning of previous word
+            if text[-1] == " ":
+                # Find the second to last space
+                second_last_space = text[:-1].rfind(" ")
+                delete_start = f"1.0+{second_last_space + 2}c" if second_last_space != -1 else "1.0"
+            else:
+                delete_start = f"1.0+{last_space_index + 2}c"
+            self.text_area.delete(delete_start, cursor_index)
 
     def new_file(self):
         self.text_area.delete(1.0, tk.END)
