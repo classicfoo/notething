@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk  # Import ttk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, simpledialog # <-- Import simpledialog
 from datetime import datetime  # Import datetime module
 import tkinter.font as tkFont  # Import tkinter font module
 import argparse # <-- Import argparse
@@ -132,6 +132,7 @@ class Notepad:
         file_menu.add_command(label="New", command=self.new_file, accelerator='Ctrl+N')
         file_menu.add_command(label="Open", command=self.open_file, accelerator='Ctrl+O')
         file_menu.add_command(label="Save", command=self.save_file, accelerator='Ctrl+S')
+        file_menu.add_command(label="Rename", command=self.rename_file)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.quit)
 
@@ -329,6 +330,62 @@ class Notepad:
         # Optional: Add checks here if needed (e.g., ignore certain keys)
         self._update_line_colors()
     # --- End new method ---
+
+    def rename_file(self):
+        """Renames the currently open file."""
+        if not self.current_file:
+            messagebox.showwarning("Rename Error", "Please save the file before renaming.")
+            return
+
+        current_dir = os.path.dirname(self.current_file)
+        current_basename = os.path.basename(self.current_file)
+
+        new_basename = simpledialog.askstring(
+            "Rename File",
+            "Enter new filename:",
+            initialvalue=current_basename,
+            parent=self.root # Make dialog modal to the main window
+        )
+
+        # Handle cancellation or empty input
+        if not new_basename:
+            return # User cancelled or entered nothing
+
+        # Prevent renaming to the same name (optional, but good practice)
+        if new_basename == current_basename:
+            return # No change needed
+
+        new_file_path = os.path.join(current_dir, new_basename)
+
+        # Check if the new filename already exists
+        if os.path.exists(new_file_path):
+            if not messagebox.askyesno(
+                "Confirm Overwrite",
+                f"'{new_basename}' already exists.\nDo you want to replace it?"
+            ):
+                return # User chose not to overwrite
+
+        try:
+            # Attempt to rename the file on disk
+            os.rename(self.current_file, new_file_path)
+
+            # Update internal state if rename succeeds
+            old_filename = os.path.basename(self.current_file) # For status message
+            self.current_file = new_file_path
+            new_filename = os.path.basename(self.current_file) # Use the actual new name
+
+            # Update window title
+            self.root.title(f"Notething - {new_filename}")
+
+            # Update status bar
+            status_text = f"Status: Renamed '{old_filename}' to '{new_filename}'"
+            self.status_bar.config(text=status_text)
+            self.tooltip.set_text(status_text)
+
+        except OSError as e:
+            messagebox.showerror("Rename Error", f"Could not rename file:\n{e}")
+        except Exception as e: # Catch other potential errors
+             messagebox.showerror("Rename Error", f"An unexpected error occurred:\n{e}")
 
 if __name__ == "__main__":
     # --- Argument Parsing ---
