@@ -168,7 +168,7 @@ class FindReplaceDialog(tk.Toplevel):
         # --- End Refined Replace logic ---
 
     def replace_all(self):
-        # --- Placeholder for replace all logic ---
+        # --- Replace All logic with single undo step ---
         find_term = self.find_what_var.get()
         replace_term = self.replace_with_var.get()
         nocase = not self.match_case_var.get()
@@ -179,33 +179,46 @@ class FindReplaceDialog(tk.Toplevel):
 
         # --- Remove any existing highlight before starting ---
         self.text_widget.tag_remove("search_highlight", "1.0", tk.END)
-        # ---
 
         count = 0
         start_pos = "1.0"
-        while True:
-            found_pos = self.text_widget.search(find_term, start_pos, stopindex=tk.END, nocase=nocase, count=tk.IntVar()) # Added count var for robustness
-            if not found_pos:
-                break # No more occurrences
 
-            # Check if found_pos is valid before proceeding
-            if not found_pos: continue # Should not happen with break, but safe check
+        # --- Temporarily disable auto separators for single undo ---
+        try:
+            original_autoseparators = self.text_widget.cget("autoseparators")
+            self.text_widget.config(autoseparators=False)
 
-            end_pos = f"{found_pos}+{len(find_term)}c"
-            self.text_widget.delete(found_pos, end_pos)
-            self.text_widget.insert(found_pos, replace_term)
-            count += 1
-            # Start next search *after* the inserted text
-            start_pos = f"{found_pos}+{len(replace_term)}c"
+            while True:
+                found_pos = self.text_widget.search(find_term, start_pos, stopindex=tk.END, nocase=nocase, count=tk.IntVar())
+                if not found_pos:
+                    break # No more occurrences
+
+                # Check if found_pos is valid before proceeding
+                if not found_pos: continue
+
+                end_pos = f"{found_pos}+{len(find_term)}c"
+                self.text_widget.delete(found_pos, end_pos)
+                self.text_widget.insert(found_pos, replace_term)
+                count += 1
+                # Start next search *after* the inserted text
+                start_pos = f"{found_pos}+{len(replace_term)}c"
+
+            # --- Manually add undo separator *if* changes were made ---
+            if count > 0:
+                self.text_widget.edit_separator()
+
+        finally:
+            # --- Always restore original autoseparator setting ---
+            self.text_widget.config(autoseparators=original_autoseparators)
+        # --- End single undo step logic ---
 
         if count > 0:
              messagebox.showinfo("Replace All", f"Replaced {count} occurrence(s).", parent=self)
              # Update line colors only if changes were made
-             if hasattr(self.master, '_update_line_colors'):
-                 self.master._update_line_colors()
+             self._update_line_colors() # Call helper method
         else:
              messagebox.showinfo("Replace All", f"Cannot find '{find_term}'", parent=self)
-        # --- End Placeholder ---
+        # --- End Replace All logic ---
 
     # Need access to the main app's color update method
     def _update_line_colors(self):
