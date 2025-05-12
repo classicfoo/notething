@@ -7,6 +7,213 @@ import argparse # <-- Import argparse
 from tkinterdnd2 import DND_FILES, TkinterDnD # <-- Import TkinterDnD2
 import os # <-- Import os module
 import pytz # <-- Import pytz for timezone handling
+import tkinter.simpledialog # Already imported, but ensure it's there
+
+# --- Find/Replace Dialog Class ---
+class FindReplaceDialog(tk.Toplevel):
+    def __init__(self, master, text_widget, replace_mode=False):
+        super().__init__(master)
+        self.text_widget = text_widget
+
+        self.title("Find" if not replace_mode else "Find and Replace")
+        # Set initial size *before* centering
+        dialog_width = 350
+        dialog_height = 150
+        self.geometry(f"{dialog_width}x{dialog_height}")
+        self.resizable(False, False)
+        self.transient(master) # Keep dialog on top of the main window
+
+        # --- Center the dialog window ---
+        self.update_idletasks() # Ensure window dimensions are calculated
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        # Use the requested width/height, not winfo_width/height which might not be ready
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        self.geometry(f"+{x}+{y}") # Reposition using calculated coordinates
+        # --- End Centering ---
+
+        # Variables for entries and checkbox
+        self.find_what_var = tk.StringVar()
+        self.replace_with_var = tk.StringVar()
+        self.match_case_var = tk.BooleanVar()
+
+        # --- UI Elements ---
+        # Frame for entries
+        entry_frame = ttk.Frame(self, padding="10")
+        entry_frame.pack(fill=tk.X)
+
+        ttk.Label(entry_frame, text="Find what:").grid(row=0, column=0, sticky='w', padx=5, pady=2)
+        self.find_entry = ttk.Entry(entry_frame, textvariable=self.find_what_var, width=30)
+        self.find_entry.grid(row=0, column=1, sticky='ew', padx=5, pady=2)
+
+        if replace_mode:
+            ttk.Label(entry_frame, text="Replace with:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
+            self.replace_entry = ttk.Entry(entry_frame, textvariable=self.replace_with_var, width=30)
+            self.replace_entry.grid(row=1, column=1, sticky='ew', padx=5, pady=2)
+
+        entry_frame.columnconfigure(1, weight=1) # Make entry expand
+
+        # Frame for options and buttons
+        bottom_frame = ttk.Frame(self, padding="5 10")
+        bottom_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Options (Checkboxes) - using a sub-frame for alignment
+        options_frame = ttk.Frame(bottom_frame)
+        options_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
+        self.match_case_check = ttk.Checkbutton(options_frame, text="Match case", variable=self.match_case_var)
+        self.match_case_check.pack(anchor='w')
+        # Add "Wrap around" later if needed
+
+        # Buttons - using a sub-frame for alignment
+        button_frame = ttk.Frame(bottom_frame)
+        button_frame.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.find_next_btn = ttk.Button(button_frame, text="Find Next", command=self.find_next)
+        self.find_next_btn.pack(side=tk.LEFT, padx=2, pady=2)
+
+        if replace_mode:
+            self.replace_btn = ttk.Button(button_frame, text="Replace", command=self.replace)
+            self.replace_btn.pack(side=tk.LEFT, padx=2, pady=2)
+            self.replace_all_btn = ttk.Button(button_frame, text="Replace All", command=self.replace_all)
+            self.replace_all_btn.pack(side=tk.LEFT, padx=2, pady=2)
+
+        # --- Initial Focus and Bindings ---
+        self.find_entry.focus_set() # Start cursor in "Find what"
+        self.protocol("WM_DELETE_WINDOW", self.destroy) # Handle closing via 'X' button
+
+        # Bind Enter key in find entry to Find Next
+        self.find_entry.bind("<Return>", lambda event: self.find_next())
+        if replace_mode:
+             self.replace_entry.bind("<Return>", lambda event: self.replace())
+
+        # --- Bind Escape key to close the dialog ---
+        self.bind("<Escape>", lambda event: self.destroy())
+        # --- End Escape Binding ---
+
+        # Store last search position
+        self.last_pos = "1.0"
+
+    def find_next(self):
+        # --- Refined Find logic using custom highlight ---
+        find_term = self.find_what_var.get()
+        if not find_term:
+            messagebox.showwarning("Find", "Please enter text to find.", parent=self)
+            return
+
+        # Remove previous highlight *before* searching
+        self.text_widget.tag_remove("search_highlight", "1.0", tk.END)
+
+        # Start search from the current cursor position (INSERT mark)
+        start_pos = self.text_widget.index(tk.INSERT)
+
+        nocase = not self.match_case_var.get()
+        # Search from start_pos to the end of the text
+        found_pos = self.text_widget.search(find_term, start_pos, stopindex=tk.END, nocase=nocase)
+
+        if found_pos:
+            end_pos = f"{found_pos}+{len(find_term)}c"
+            self.text_widget.tag_add("search_highlight", found_pos, end_pos)
+            self.text_widget.see(found_pos) # Scroll to make it visible
+            # Move INSERT mark to the END of the found text for the next search
+            self.text_widget.mark_set(tk.INSERT, end_pos)
+            self.lift() # Bring dialog to front
+        else:
+            # If not found from cursor to end, wrap around and search from beginning to cursor
+            # (stopindex=start_pos prevents finding the same match again if it's at the very beginning)
+            found_pos = self.text_widget.search(find_term, "1.0", stopindex=start_pos, nocase=nocase)
+            if found_pos:
+                end_pos = f"{found_pos}+{len(find_term)}c"
+                self.text_widget.tag_add("search_highlight", found_pos, end_pos)
+                self.text_widget.see(found_pos)
+                # Move INSERT mark to the END of the found text for the next search
+                self.text_widget.mark_set(tk.INSERT, end_pos)
+                self.lift()
+            else:
+                # If still not found after wrapping, inform the user
+                messagebox.showinfo("Find", f"Cannot find '{find_term}'", parent=self)
+                # Optional: Reset INSERT mark to beginning if nothing found
+                # self.text_widget.mark_set(tk.INSERT, "1.0")
+        # --- End Refined Find logic ---
+
+    def replace(self):
+        # --- Refined Replace logic ---
+        find_term = self.find_what_var.get()
+        replace_term = self.replace_with_var.get()
+        nocase = not self.match_case_var.get()
+
+        # Check if the currently highlighted search result matches the find term
+        highlight_range = self.text_widget.tag_ranges("search_highlight")
+        if highlight_range:
+            hl_start, hl_end = highlight_range
+            highlighted_text = self.text_widget.get(hl_start, hl_end)
+
+            # Compare highlighted text with find_term (respecting case option)
+            text_to_compare = highlighted_text if not nocase else highlighted_text.lower()
+            find_to_compare = find_term if not nocase else find_term.lower()
+
+            if text_to_compare == find_to_compare:
+                # Remove highlight *before* deleting
+                self.text_widget.tag_remove("search_highlight", hl_start, hl_end)
+                self.text_widget.delete(hl_start, hl_end)
+                self.text_widget.insert(hl_start, replace_term)
+                # Move cursor to end of replaced text - this becomes the start for the *next* find
+                self.text_widget.mark_set(tk.INSERT, f"{hl_start}+{len(replace_term)}c")
+                # DO NOT automatically find next here. Let the user click Find Next again.
+                return # Stop after successful replace
+
+        # If no highlight matches the find term,
+        # just find the next occurrence (as if Find Next was clicked).
+        self.find_next()
+        # --- End Refined Replace logic ---
+
+    def replace_all(self):
+        # --- Placeholder for replace all logic ---
+        find_term = self.find_what_var.get()
+        replace_term = self.replace_with_var.get()
+        nocase = not self.match_case_var.get()
+
+        if not find_term:
+            messagebox.showwarning("Replace All", "Please enter text to find.", parent=self)
+            return
+
+        # --- Remove any existing highlight before starting ---
+        self.text_widget.tag_remove("search_highlight", "1.0", tk.END)
+        # ---
+
+        count = 0
+        start_pos = "1.0"
+        while True:
+            found_pos = self.text_widget.search(find_term, start_pos, stopindex=tk.END, nocase=nocase, count=tk.IntVar()) # Added count var for robustness
+            if not found_pos:
+                break # No more occurrences
+
+            # Check if found_pos is valid before proceeding
+            if not found_pos: continue # Should not happen with break, but safe check
+
+            end_pos = f"{found_pos}+{len(find_term)}c"
+            self.text_widget.delete(found_pos, end_pos)
+            self.text_widget.insert(found_pos, replace_term)
+            count += 1
+            # Start next search *after* the inserted text
+            start_pos = f"{found_pos}+{len(replace_term)}c"
+
+        if count > 0:
+             messagebox.showinfo("Replace All", f"Replaced {count} occurrence(s).", parent=self)
+             # Update line colors only if changes were made
+             if hasattr(self.master, '_update_line_colors'):
+                 self.master._update_line_colors()
+        else:
+             messagebox.showinfo("Replace All", f"Cannot find '{find_term}'", parent=self)
+        # --- End Placeholder ---
+
+    # Need access to the main app's color update method
+    def _update_line_colors(self):
+         if hasattr(self.master, '_update_line_colors'):
+              self.master._update_line_colors()
+
+
+# --- End Find/Replace Dialog Class ---
 
 class Tooltip:
     """Create a tooltip for a given widget."""
@@ -77,16 +284,19 @@ class Notepad:
             maxundo=0,  # <-- 0 means unlimited undo levels
             autoseparators=True,  # <-- Automatically separate undo operations
             yscrollcommand=self.scrollbar.set, # Link text area scroll to scrollbar
-            selectbackground="lightgrey", # <-- Set selection background color
-            selectforeground="black"      # <-- Set selection foreground color
+            selectbackground="lightgrey", # <-- Change selection background back to lightgrey
+            selectforeground="black",      # Keep selection text black
+            exportselection=False          # <-- Keep selection visible without focus
         )
         self.text_area.pack(expand=True, fill='both', side=tk.LEFT) # Pack text area after scrollbar
 
         # --- Configure Line Color Tags ---
         self.text_area.tag_configure("green_line", foreground="green")
         self.text_area.tag_configure("blue_line", foreground="blue")
-        self.text_area.tag_configure("grey_line", foreground="grey") # <-- Add grey tag
-        self.text_area.tag_configure("normal_line", foreground="black") # Explicitly define black
+        self.text_area.tag_configure("grey_line", foreground="grey")
+        self.text_area.tag_configure("normal_line", foreground="black")
+        # --- Add Custom Search Highlight Tag ---
+        self.text_area.tag_configure("search_highlight", background="yellow", foreground="black")
         # --- End Tag Configuration ---
 
         # --- Drag and Drop Setup ---
@@ -107,6 +317,13 @@ class Notepad:
         # Create a tooltip for the status bar
         self.tooltip = Tooltip(self.status_bar)
         self.tooltip.set_text(self.status_bar.cget("text"))
+
+        # --- Find/Replace State ---
+        self.find_dialog = None
+        self.last_find_text = ""
+        self.last_replace_text = ""
+        self.last_match_case = False
+        # --- End Find/Replace State ---
 
         self.create_menu()
         self.bind_hotkeys()
@@ -138,13 +355,26 @@ class Notepad:
         file_menu.add_command(label="Exit", command=self.root.quit)
 
         menu_bar.add_cascade(label="File", menu=file_menu)
+
+        # --- Add Edit Menu ---
+        edit_menu = tk.Menu(menu_bar, tearoff=0)
+        # Add Undo/Redo if needed later using text_area.edit_undo(), text_area.edit_redo()
+        edit_menu.add_command(label="Find...", command=self.open_find_dialog, accelerator="Ctrl+F")
+        edit_menu.add_command(label="Replace...", command=self.open_replace_dialog, accelerator="Ctrl+H")
+        menu_bar.add_cascade(label="Edit", menu=edit_menu)
+        # --- End Edit Menu ---
+
         self.root.config(menu=menu_bar)
 
     def bind_hotkeys(self):
         self.root.bind('<Control-n>', lambda event: self.new_file())
         self.root.bind('<Control-o>', lambda event: self.open_file())
         self.root.bind('<Control-s>', lambda event: self.save_file())
-        self.root.bind('<F5>', lambda event: self.insert_sydney_time()) # <-- Bind F5
+        self.root.bind('<F5>', lambda event: self.insert_sydney_time())
+        # --- Add Find/Replace Hotkeys ---
+        self.root.bind('<Control-f>', lambda event: self.open_find_dialog())
+        self.root.bind('<Control-h>', lambda event: self.open_replace_dialog())
+        # --- End Find/Replace Hotkeys ---
 
     def delete_previous_word(self, event):
         # Get the current cursor position
@@ -403,6 +633,65 @@ class Notepad:
         except Exception as e:
             messagebox.showerror("Time Error", f"Could not get Sydney time:\n{e}")
     # --- End method to insert Sydney time ---
+
+    # --- Methods to Open Find/Replace Dialog ---
+    def _launch_find_replace_dialog(self, replace_mode=False):
+        if self.find_dialog is not None:
+            try:
+                # If window exists but was closed/destroyed, this will raise TclError
+                self.find_dialog.lift()
+                # If it's already a replace dialog but user wants find, or vice-versa,
+                # maybe recreate it? For now, just lift existing.
+                # A better approach might be a single dialog that shows/hides replace widgets.
+                return # Already open
+            except tk.TclError:
+                self.find_dialog = None # It was destroyed, clear reference
+
+        self.find_dialog = FindReplaceDialog(self.root, self.text_area, replace_mode=replace_mode)
+
+        # Pre-fill with last search values
+        self.find_dialog.find_what_var.set(self.last_find_text)
+        if replace_mode:
+            self.find_dialog.replace_with_var.set(self.last_replace_text)
+        self.find_dialog.match_case_var.set(self.last_match_case)
+
+        # Set focus correctly
+        if replace_mode and self.last_find_text:
+             self.find_dialog.replace_entry.focus_set()
+        else:
+             self.find_dialog.find_entry.focus_set()
+
+
+        # Register callback for when dialog is closed
+        self.find_dialog.bind("<Destroy>", self._find_dialog_closed)
+
+    def open_find_dialog(self):
+        self._launch_find_replace_dialog(replace_mode=False)
+
+    def open_replace_dialog(self):
+        self._launch_find_replace_dialog(replace_mode=True)
+
+    def _find_dialog_closed(self, event=None):
+        # Check if the event widget is the dialog we tracked
+        if self.find_dialog is not None and event.widget == self.find_dialog:
+             # --- Remove search highlight when dialog closes ---
+             try:
+                 self.text_area.tag_remove("search_highlight", "1.0", tk.END)
+             except tk.TclError:
+                 pass # Ignore error if text_area is already gone
+             # ---
+
+             # Save last values before clearing the reference
+             try:
+                  self.last_find_text = self.find_dialog.find_what_var.get()
+                  if hasattr(self.find_dialog, 'replace_with_var'):
+                       self.last_replace_text = self.find_dialog.replace_with_var.get()
+                  self.last_match_case = self.find_dialog.match_case_var.get()
+             except tk.TclError:
+                  pass
+             finally:
+                  self.find_dialog = None # Clear the reference
+    # --- End Find/Replace Dialog Methods ---
 
 if __name__ == "__main__":
     # --- Argument Parsing ---
