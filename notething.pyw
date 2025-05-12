@@ -6,6 +6,7 @@ import tkinter.font as tkFont  # Import tkinter font module
 import argparse # <-- Import argparse
 from tkinterdnd2 import DND_FILES, TkinterDnD # <-- Import TkinterDnD2
 import os # <-- Import os module
+import pytz # <-- Import pytz for timezone handling
 
 class Tooltip:
     """Create a tooltip for a given widget."""
@@ -143,6 +144,7 @@ class Notepad:
         self.root.bind('<Control-n>', lambda event: self.new_file())
         self.root.bind('<Control-o>', lambda event: self.open_file())
         self.root.bind('<Control-s>', lambda event: self.save_file())
+        self.root.bind('<F5>', lambda event: self.insert_sydney_time()) # <-- Bind F5
 
     def delete_previous_word(self, event):
         # Get the current cursor position
@@ -386,6 +388,21 @@ class Notepad:
             messagebox.showerror("Rename Error", f"Could not rename file:\n{e}")
         except Exception as e: # Catch other potential errors
              messagebox.showerror("Rename Error", f"An unexpected error occurred:\n{e}")
+
+    # --- Add method to insert Sydney time ---
+    def insert_sydney_time(self):
+        """Inserts the current time in Sydney, NSW at the cursor position."""
+        try:
+            sydney_tz = pytz.timezone('Australia/Sydney')
+            sydney_time = datetime.now(sydney_tz)
+            # Format as HH:MM:SS AM/PM or use 24-hour HH:MM:SS
+            time_str = sydney_time.strftime("%I:%M %p") # 12-hour format with AM/PM, no seconds
+            # time_str = sydney_time.strftime("%H:%M:%S")   # 24-hour format
+            
+            self.text_area.insert(tk.INSERT, time_str)
+        except Exception as e:
+            messagebox.showerror("Time Error", f"Could not get Sydney time:\n{e}")
+    # --- End method to insert Sydney time ---
 
 if __name__ == "__main__":
     # --- Argument Parsing ---
