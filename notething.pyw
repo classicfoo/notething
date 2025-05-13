@@ -263,18 +263,53 @@ class Tooltip:
         self.text = text
 
 class Notepad:
+    # --- Class variables for window management and cascading ---
+    open_window_count = 0
+    cascade_offset = 30  # Pixels to offset each new window
+    first_window_x = None
+    first_window_y = None
+    default_window_width = 800
+    default_window_height = 500
+    # ---
+
     def __init__(self, root, initial_file=None):
         self.root = root
-        self.root.title("Notething")
+        # self.root.title("Notething") # Title will be set after checking current_file
 
-        # Center the window on the screen
-        window_width = 800
-        window_height = 500
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
-        x = (screen_width // 2) - (window_width // 2)
-        y = (screen_height // 2) - (window_height // 2)
-        self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        Notepad.open_window_count += 1
+
+        # --- Window Positioning and Sizing ---
+        window_width = Notepad.default_window_width
+        window_height = Notepad.default_window_height
+
+        if Notepad.first_window_x is None or Notepad.open_window_count == 1: # First window logic
+            screen_width = self.root.winfo_screenwidth()
+            screen_height = self.root.winfo_screenheight()
+            Notepad.first_window_x = (screen_width // 2) - (window_width // 2)
+            Notepad.first_window_y = (screen_height // 2) - (window_height // 2)
+            current_x = Notepad.first_window_x
+            current_y = Notepad.first_window_y
+            # Reset count if this is the first window after all others might have been closed
+            if Notepad.open_window_count > 1: # Should only happen if manually reset elsewhere
+                 Notepad.open_window_count = 1
+        else:
+            # Cascade subsequent windows
+            offset_multiplier = (Notepad.open_window_count - 1)
+            current_x = Notepad.first_window_x + offset_multiplier * Notepad.cascade_offset
+            current_y = Notepad.first_window_y + offset_multiplier * Notepad.cascade_offset
+
+            # Optional: Keep window on screen
+            screen_width = self.root.winfo_screenwidth()
+            screen_height = self.root.winfo_screenheight()
+            if current_x + window_width > screen_width:
+                current_x = screen_width - window_width
+            if current_y + window_height > screen_height:
+                current_y = screen_height - window_height
+            current_x = max(0, current_x)
+            current_y = max(0, current_y)
+
+        self.root.geometry(f"{window_width}x{window_height}+{current_x}+{current_y}")
+        # --- End Window Positioning ---
 
         # --- Scrollbar and Text Area Setup ---
         # Create a frame to hold the text area and scrollbar
@@ -286,7 +321,7 @@ class Notepad:
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # Create the text area (tk)
-        self.font = tkFont.Font(family="Consolas", size=11)
+        self.font = tkFont.Font(root=self.root, family="Consolas", size=11)
         self.text_area = tk.Text(
             text_frame, # Place text area in the frame
             wrap='word',
@@ -353,12 +388,20 @@ class Notepad:
         self.text_area.bind("<Shift-Tab>", self._handle_shift_tab_key)
         # --- End Indentation Bindings ---
 
+        # --- Bind Enter for Auto-Indentation ---
+        self.text_area.bind("<Return>", self._handle_enter_key)
+        # --- End Enter Binding ---
+
         # Load initial file if provided
         if initial_file:
             self._load_file(initial_file)
         else:
             # Ensure initial coloring is applied even for an empty new file
             self._update_line_colors()
+            self.root.title("Notething - Untitled") # Set title for new blank window
+
+        # Bind the window close button (X)
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close_window)
 
     def create_menu(self):
         # tk.Menu is standard, ttk doesn't replace it
@@ -370,7 +413,7 @@ class Notepad:
         file_menu.add_command(label="Save", command=self.save_file, accelerator='Ctrl+S')
         file_menu.add_command(label="Rename", command=self.rename_file)
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.root.quit)
+        file_menu.add_command(label="Exit", command=self._on_close_window) # Changed to _on_close_window
 
         menu_bar.add_cascade(label="File", menu=file_menu)
 
@@ -389,6 +432,7 @@ class Notepad:
         self.root.bind('<Control-o>', lambda event: self.open_file())
         self.root.bind('<Control-s>', lambda event: self.save_file())
         self.root.bind('<F5>', lambda event: self.insert_sydney_time())
+        self.root.bind('<F6>', lambda event: self.insert_current_date())
         # --- Add Find/Replace Hotkeys ---
         self.root.bind('<Control-f>', lambda event: self.open_find_dialog())
         self.root.bind('<Control-h>', lambda event: self.open_replace_dialog())
@@ -424,13 +468,28 @@ class Notepad:
         return "break" # Prevent default Backspace behavior
 
     def new_file(self):
-        self.text_area.delete(1.0, tk.END)
-        self.current_file = None  # Reset current file
-        self.root.title("Notething") # <-- Reset the window title
-        status_text = "Status: Untitled" # <-- Updated status message
-        self.status_bar.config(text=status_text)
-        self.tooltip.set_text(status_text)
-        self._update_line_colors() # Update colors for the empty area
+        """Opens a new, blank Notepad window."""
+        new_notepad_root = TkinterDnD.Tk() # Create a new Tk root
+
+        # Apply the same theme setup as the main window
+        # This ensures new windows also get the theme.
+        style = ttk.Style(new_notepad_root)
+        try:
+            # Try a theme that might look better on the specific OS
+            if new_notepad_root.tk.call('tk', 'windowingsystem') == 'win32':
+                style.theme_use('vista') # Or 'xpnative'
+            elif new_notepad_root.tk.call('tk', 'windowingsystem') == 'aqua':
+                style.theme_use('aqua') # macOS
+            else:
+                style.theme_use('clam') # A reasonable default for Linux/others
+        except tk.TclError:
+            style.theme_use("default") # Fallback
+
+        # Create a new Notepad instance associated with the new root.
+        # No initial_file is passed, so it will be a blank editor.
+        Notepad(new_notepad_root)
+        # The main application's root.mainloop() will handle this new window's events.
+        # Do not call new_notepad_root.mainloop() here.
 
     def _load_file(self, file_path):
         """Loads the content of the specified file into the text area."""
@@ -652,6 +711,17 @@ class Notepad:
             messagebox.showerror("Time Error", f"Could not get Sydney time:\n{e}")
     # --- End method to insert Sydney time ---
 
+    # --- Add method to insert current date ---
+    def insert_current_date(self):
+        """Inserts the current date in 'dd MMM yyyy' format at the cursor position."""
+        try:
+            # Format: e.g., 23 Jul 2024
+            date_str = datetime.now().strftime("%d %b %Y")
+            self.text_area.insert(tk.INSERT, date_str)
+        except Exception as e:
+            messagebox.showerror("Date Error", f"Could not get current date:\n{e}")
+    # --- End method to insert current date ---
+
     # --- Methods to Open Find/Replace Dialog ---
     def _launch_find_replace_dialog(self, replace_mode=False):
         if self.find_dialog is not None:
@@ -849,6 +919,63 @@ class Notepad:
         
         return "break"
     # --- End Tab/Shift-Tab Handlers ---
+
+    # --- Add Enter Key Handler for Auto-Indentation ---
+    def _handle_enter_key(self, event=None):
+        """Handles Enter key press for auto-indentation."""
+        current_cursor_pos = self.text_area.index(tk.INSERT)
+        current_line_start_idx = self.text_area.index(f"{current_cursor_pos} linestart")
+        current_line_end_idx = self.text_area.index(f"{current_cursor_pos} lineend")
+        current_line_content = self.text_area.get(current_line_start_idx, current_line_end_idx)
+
+        leading_whitespace = ""
+        for char in current_line_content:
+            if char.isspace(): # Catches spaces, tabs, etc.
+                leading_whitespace += char
+            else:
+                break
+
+        text_before_cursor_on_line = self.text_area.get(current_line_start_idx, current_cursor_pos)
+
+        original_autoseparators = self.text_area.cget("autoseparators")
+        self.text_area.config(autoseparators=False)
+        
+        try:
+            # Scenario 1: Pressing Enter on a line that *only* contains whitespace,
+            # and the cursor is at the end of this whitespace.
+            if current_line_content.strip() == "" and text_before_cursor_on_line == current_line_content:
+                self.text_area.delete(current_line_start_idx, current_line_end_idx)
+                self.text_area.insert(current_line_start_idx, "\n") # Cursor moves to next line, col 0
+                self.text_area.edit_separator()
+            else:
+                # Scenario 2: Auto-indent new line, potentially splitting the current line.
+                # Text after the cursor on the current line.
+                suffix = self.text_area.get(current_cursor_pos, current_line_end_idx)
+                
+                # Delete the suffix from the current line.
+                self.text_area.delete(current_cursor_pos, current_line_end_idx)
+                
+                # Insert newline, the indent, and then the suffix.
+                self.text_area.insert(current_cursor_pos, "\n" + leading_whitespace + suffix)
+                self.text_area.edit_separator()
+        finally:
+            self.text_area.config(autoseparators=original_autoseparators)
+
+        self._update_line_colors()
+        return "break" # Prevent default Tkinter Enter behavior
+    # --- End Enter Key Handler ---
+
+    def _on_close_window(self):
+        """Handles window close event."""
+        # Here you could add logic to check for unsaved changes before closing.
+        # For now, just destroy the window.
+        # Notepad.open_window_count -= 1 # Decrementing can be complex if windows close out of order
+                                        # and we want to reuse cascade slots.
+                                        # If open_window_count reaches 0, reset first_window_x/y
+                                        # so the next new window (if app is kept running) re-centers.
+        # A simpler approach for now: The mainloop exits when the last Tk root is destroyed.
+        # The cascading will just continue from the initial point.
+        self.root.destroy()
 
 if __name__ == "__main__":
     # --- Argument Parsing ---
