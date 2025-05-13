@@ -322,6 +322,7 @@ class Notepad:
 
         # Create the text area (tk)
         self.font = tkFont.Font(root=self.root, family="Consolas", size=11)
+        self.bold_font = tkFont.Font(root=self.root, family="Consolas", size=11, weight="bold") # New bold font
         self.text_area = tk.Text(
             text_frame, # Place text area in the frame
             wrap='word',
@@ -342,7 +343,9 @@ class Notepad:
         self.text_area.tag_configure("green_line", foreground="green")
         self.text_area.tag_configure("blue_line", foreground="blue")
         self.text_area.tag_configure("grey_line", foreground="grey")
-        self.text_area.tag_configure("normal_line", foreground="black")
+        self.text_area.tag_configure("normal_line", foreground="black") # Default
+        self.text_area.tag_configure("maroon_line", foreground="maroon") # New maroon tag
+        self.text_area.tag_configure("bold_line", font=self.bold_font)   # New bold tag
         # --- Add Custom Search Highlight Tag ---
         self.text_area.tag_configure("search_highlight", background="yellow", foreground="black")
         # --- End Tag Configuration ---
@@ -413,7 +416,7 @@ class Notepad:
         file_menu.add_command(label="Save", command=self.save_file, accelerator='Ctrl+S')
         file_menu.add_command(label="Rename", command=self.rename_file)
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self._on_close_window) # Changed to _on_close_window
+        file_menu.add_command(label="Exit", command=self.root.quit)
 
         menu_bar.add_cascade(label="File", menu=file_menu)
 
@@ -605,6 +608,8 @@ class Notepad:
         self.text_area.tag_remove("green_line", "1.0", tk.END)
         self.text_area.tag_remove("blue_line", "1.0", tk.END)
         self.text_area.tag_remove("grey_line", "1.0", tk.END)
+        self.text_area.tag_remove("maroon_line", "1.0", tk.END)
+        self.text_area.tag_remove("bold_line", "1.0", tk.END)
         self.text_area.tag_remove("normal_line", "1.0", tk.END)
 
         # Iterate through each line
@@ -630,6 +635,10 @@ class Notepad:
                 self.text_area.tag_add("green_line", line_start, line_end) # Apply GREEN tag
             elif stripped_line.startswith("T "): # Check for T third
                 self.text_area.tag_add("blue_line", line_start, line_end) # Apply BLUE tag
+            elif stripped_line.startswith("M "): # Check for M fourth
+                self.text_area.tag_add("maroon_line", line_start, line_end) #Apply MAROON tag
+            elif stripped_line.startswith("# ") or stripped_line.startswith("## ") or stripped_line.startswith("### "): # Check for headings
+                self.text_area.tag_add("bold_line", line_start, line_end) # Apply HEADING tag
             else:
                 # Apply normal color tag if none of the conditions are met
                 self.text_area.tag_add("normal_line", line_start, line_end)
