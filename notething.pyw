@@ -348,6 +348,11 @@ class Notepad:
         self.text_area.bind("<KeyRelease>", self._update_line_colors_event) # Use _event suffix for direct bindings
         # --- End KeyRelease Binding ---
 
+        # --- Bind Tab and Shift-Tab for Indentation ---
+        self.text_area.bind("<Tab>", self._handle_tab_key)
+        self.text_area.bind("<Shift-Tab>", self._handle_shift_tab_key)
+        # --- End Indentation Bindings ---
+
         # Load initial file if provided
         if initial_file:
             self._load_file(initial_file)
@@ -705,6 +710,145 @@ class Notepad:
              finally:
                   self.find_dialog = None # Clear the reference
     # --- End Find/Replace Dialog Methods ---
+
+    # --- Add Tab/Shift-Tab Handlers ---
+    def _handle_tab_key(self, event=None):
+        """Handles Tab key press for indentation."""
+        try:
+            sel_first_idx = self.text_area.index(tk.SEL_FIRST)
+            sel_last_idx = self.text_area.index(tk.SEL_LAST)
+        except tk.TclError: # No selection
+            # Default behavior: insert a tab at cursor
+            self.text_area.insert(tk.INSERT, "\t")
+            self._update_line_colors() # Update colors if a line prefix changes
+            return "break" # Prevent focus change
+
+        first_line_num = int(sel_first_idx.split('.')[0])
+        last_line_num_sel = int(sel_last_idx.split('.')[0])
+        last_char_num_sel = int(sel_last_idx.split('.')[1])
+
+        # Determine the actual last line to process for indentation
+        if last_char_num_sel == 0 and last_line_num_sel > first_line_num:
+            # Selection ends at the start of a new line, so process up to the line before it
+            last_line_to_process = last_line_num_sel - 1
+        else:
+            last_line_to_process = last_line_num_sel
+        
+        # If it's effectively a single line selection where start and end are on the same line,
+        # and the selection doesn't span a newline character, insert a tab.
+        # This handles selecting part of a single line and pressing tab.
+        if first_line_num == last_line_to_process and '\n' not in self.text_area.get(sel_first_idx, sel_last_idx):
+            # For single line partial selection, standard tab insertion at cursor might be preferred
+            # or indenting the line if cursor is at start.
+            # For simplicity, let's indent the line if any part of it is selected.
+            # If we want to insert tab at cursor for single line:
+            # current_cursor_pos = self.text_area.index(tk.INSERT)
+            # self.text_area.insert(current_cursor_pos, "\t")
+            # self.text_area.tag_remove(tk.SEL, "1.0", tk.END) # Clear selection
+            # self.text_area.mark_set(tk.INSERT, f"{current_cursor_pos}+{len('\t')}c")
+            # self._update_line_colors()
+            # return "break"
+            #
+            # For indenting the single selected line:
+            pass # Fall through to multi-line logic which will indent this single line
+
+
+        original_autoseparators = self.text_area.cget("autoseparators")
+        self.text_area.config(autoseparators=False)
+        modified = False
+        try:
+            for i in range(first_line_num, last_line_to_process + 1):
+                self.text_area.insert(f"{i}.0", "\t")
+                modified = True
+            
+            if modified:
+                self.text_area.edit_separator()
+                
+                # Re-select the indented block
+                self.text_area.tag_remove(tk.SEL, "1.0", tk.END)
+                
+                adj_sel_first_char_idx = int(sel_first_idx.split('.')[1]) + 1
+                adj_sel_first = f"{first_line_num}.{adj_sel_first_char_idx}"
+                
+                adj_sel_last_char_idx = last_char_num_sel
+                if last_line_num_sel <= last_line_to_process: # if the line of sel_last was indented
+                    adj_sel_last_char_idx += 1
+                adj_sel_last = f"{last_line_num_sel}.{adj_sel_last_char_idx}"
+
+                self.text_area.tag_add(tk.SEL, adj_sel_first, adj_sel_last)
+                self.text_area.mark_set(tk.INSERT, adj_sel_last) # Move cursor to end of new selection
+                self._update_line_colors()
+        finally:
+            self.text_area.config(autoseparators=original_autoseparators)
+
+        return "break"
+
+    def _handle_shift_tab_key(self, event=None):
+        """Handles Shift+Tab key press for outdenting."""
+        try:
+            sel_first_idx = self.text_area.index(tk.SEL_FIRST)
+            sel_last_idx = self.text_area.index(tk.SEL_LAST)
+        except tk.TclError: # No selection
+            # No standard behavior for Shift-Tab without selection in simple editors
+            return "break" 
+
+        first_line_num = int(sel_first_idx.split('.')[0])
+        last_line_num_sel = int(sel_last_idx.split('.')[0])
+        last_char_num_sel = int(sel_last_idx.split('.')[1])
+
+        if last_char_num_sel == 0 and last_line_num_sel > first_line_num:
+            last_line_to_process = last_line_num_sel - 1
+        else:
+            last_line_to_process = last_line_num_sel
+
+        original_autoseparators = self.text_area.cget("autoseparators")
+        self.text_area.config(autoseparators=False)
+        modified_count = 0
+        
+        # Track character shift for the lines containing start and end of selection
+        sel_first_line_char_shift = 0
+        sel_last_line_char_shift = 0
+
+        try:
+            for i in range(first_line_num, last_line_to_process + 1):
+                current_shift = 0
+                if self.text_area.get(f"{i}.0", f"{i}.1") == "\t":
+                    self.text_area.delete(f"{i}.0", f"{i}.1")
+                    current_shift = -1
+                    modified_count +=1
+                # Add elif for spaces if needed:
+                # elif self.text_area.get(f"{i}.0", f"{i}.4") == "    ":
+                #     self.text_area.delete(f"{i}.0", f"{i}.4")
+                #     current_shift = -4
+                #     modified_count += 1
+                
+                if i == first_line_num:
+                    sel_first_line_char_shift = current_shift
+                if i == last_line_num_sel: # If the line where selection ends was outdented
+                    sel_last_line_char_shift = current_shift
+            
+            if modified_count > 0:
+                self.text_area.edit_separator()
+                self.text_area.tag_remove(tk.SEL, "1.0", tk.END)
+
+                adj_sel_first_char_idx = max(0, int(sel_first_idx.split('.')[1]) + sel_first_line_char_shift)
+                adj_sel_first = f"{first_line_num}.{adj_sel_first_char_idx}"
+                
+                adj_sel_last_char_idx = max(0, last_char_num_sel + sel_last_line_char_shift)
+                adj_sel_last = f"{last_line_num_sel}.{adj_sel_last_char_idx}"
+                
+                # Ensure selection direction is maintained (start <= end)
+                if self.text_area.compare(adj_sel_first, ">", adj_sel_last):
+                    adj_sel_last = adj_sel_first # Collapse selection if it inverted
+
+                self.text_area.tag_add(tk.SEL, adj_sel_first, adj_sel_last)
+                self.text_area.mark_set(tk.INSERT, adj_sel_last)
+                self._update_line_colors()
+        finally:
+            self.text_area.config(autoseparators=original_autoseparators)
+        
+        return "break"
+    # --- End Tab/Shift-Tab Handlers ---
 
 if __name__ == "__main__":
     # --- Argument Parsing ---
