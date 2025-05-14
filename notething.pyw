@@ -561,6 +561,10 @@ class Notepad:
         self.text_area.bind("<Return>", self._handle_enter_key)
         # --- End Enter Binding ---
 
+        # --- Bind Home for Smart Home ---
+        self.text_area.bind("<Home>", self._handle_home_key)
+        # --- End Home Binding ---
+
         # Load initial file if provided
         if initial_file:
             self._load_file(initial_file)
@@ -1150,6 +1154,32 @@ class Notepad:
         self._update_line_colors()
         return "break" # Prevent default Tkinter Enter behavior
     # --- End Enter Key Handler ---
+
+    # --- Add Smart Home Key Handler ---
+    def _handle_home_key(self, event=None):
+        """Handles Home key press for smart home behavior."""
+        current_cursor_pos = self.text_area.index(tk.INSERT)
+        current_line_start = self.text_area.index(f"{current_cursor_pos} linestart")
+        current_line_end = self.text_area.index(f"{current_cursor_pos} lineend")
+        current_line_content = self.text_area.get(current_line_start, current_line_end)
+
+        # Find the first non-whitespace character
+        first_non_whitespace = 0
+        for i, char in enumerate(current_line_content):
+            if not char.isspace():
+                first_non_whitespace = i
+                break
+
+        # If cursor is already at first non-whitespace, go to start of line
+        current_column = int(current_cursor_pos.split('.')[1])
+        if current_column == first_non_whitespace:
+            self.text_area.mark_set(tk.INSERT, current_line_start)
+        else:
+            # Go to first non-whitespace
+            self.text_area.mark_set(tk.INSERT, f"{current_line_start}+{first_non_whitespace}c")
+
+        return "break" # Prevent default Home behavior
+    # --- End Smart Home Key Handler ---
 
     def _on_close_window(self):
         """Handles window close event."""
