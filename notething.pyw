@@ -8,6 +8,172 @@ from tkinterdnd2 import DND_FILES, TkinterDnD # <-- Import TkinterDnD2
 import os # <-- Import os module
 import pytz # <-- Import pytz for timezone handling
 import tkinter.simpledialog # Already imported, but ensure it's there
+import calendar # <-- Import calendar for month names
+from tkcalendar import Calendar # <-- Import the Calendar widget
+
+# --- Date Picker Dialog Class ---
+class DatePickerDialog(tk.Toplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.transient(master)
+        self.title("Select Date")
+        self.result = None # This will store the datetime.date object if selection is valid
+
+        # Get current date for defaults
+        now = datetime.now()
+
+        # --- Variables ---
+        self.day_var = tk.StringVar(value=str(now.day))
+        # calendar.month_abbr is ['', 'Jan', 'Feb', ...], so slice from index 1
+        self.month_abbrs = list(calendar.month_abbr)[1:]
+        self.month_var = tk.StringVar(value=calendar.month_abbr[now.month])
+        self.year_var = tk.StringVar(value=str(now.year))
+
+        # --- UI Elements ---
+        main_frame = ttk.Frame(self, padding="10")
+        main_frame.pack(expand=True, fill=tk.BOTH)
+
+        # Date selection frame
+        date_frame = ttk.Frame(main_frame)
+        date_frame.pack(pady=10)
+
+        ttk.Label(date_frame, text="Day:").grid(row=0, column=0, padx=(0,2), pady=5, sticky="w")
+        self.day_cb = ttk.Combobox(date_frame, textvariable=self.day_var, values=[str(d) for d in range(1, 32)], width=4, state="readonly")
+        self.day_cb.grid(row=0, column=1, padx=(0,10), pady=5)
+
+        ttk.Label(date_frame, text="Month:").grid(row=0, column=2, padx=(0,2), pady=5, sticky="w")
+        self.month_cb = ttk.Combobox(date_frame, textvariable=self.month_var, values=self.month_abbrs, width=6, state="readonly")
+        self.month_cb.grid(row=0, column=3, padx=(0,10), pady=5)
+
+        ttk.Label(date_frame, text="Year:").grid(row=0, column=4, padx=(0,2), pady=5, sticky="w")
+        years = [str(y) for y in range(now.year - 100, now.year + 21)] # Sensible range of years
+        self.year_cb = ttk.Combobox(date_frame, textvariable=self.year_var, values=years, width=6, state="readonly")
+        self.year_cb.grid(row=0, column=5, padx=(0,5), pady=5)
+
+        # Buttons frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(pady=(5,0))
+
+        ok_button = ttk.Button(button_frame, text="OK", command=self._on_ok, width=10)
+        ok_button.pack(side=tk.LEFT, padx=5)
+        cancel_button = ttk.Button(button_frame, text="Cancel", command=self._on_cancel, width=10)
+        cancel_button.pack(side=tk.LEFT, padx=5)
+
+        # --- Centering and Modality ---
+        self.update_idletasks() # Allow Tkinter to calculate widget sizes
+        dialog_width = self.winfo_reqwidth()
+        dialog_height = self.winfo_reqheight()
+
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        self.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
+        
+        self.resizable(False, False)
+        self.bind("<Escape>", lambda e: self._on_cancel())
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+
+        self.grab_set() # Make modal
+        self.focus_set() 
+        self.day_cb.focus() # Set initial focus to the day combobox
+
+    def _on_ok(self):
+        try:
+            day = int(self.day_var.get())
+            month_str = self.month_var.get()
+            year = int(self.year_var.get())
+
+            if not month_str: # Check if month is empty
+                raise ValueError("Month cannot be empty.")
+
+            month_num = self.month_abbrs.index(month_str) + 1
+            
+            # Validate date by trying to create a datetime object
+            self.result = datetime(year, month_num, day).date()
+            self.destroy()
+        except ValueError: # Handles int conversion, month not found, or invalid date in datetime constructor
+            messagebox.showerror("Invalid Date", "Please select a valid date.", parent=self)
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}", parent=self)
+
+    def _on_cancel(self):
+        self.result = None
+        self.destroy()
+# --- End Date Picker Dialog Class ---
+
+# --- Calendar Dialog Class (using tkcalendar) ---
+class CalendarDialog(tk.Toplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.transient(master)
+        self.title("Select Date")
+        self.result_date = None # Will store the selected datetime.date object
+
+        # Get current date for initial display
+        now = datetime.now()
+
+        main_frame = ttk.Frame(self, padding="10")
+        main_frame.pack(expand=True, fill=tk.BOTH)
+
+        # Create the Calendar widget
+        self.cal = Calendar(main_frame,
+                            selectmode='day', # Allow selecting a single day
+                            year=now.year,
+                            month=now.month,
+                            day=now.day,
+                            date_pattern='dd/mm/yyyy') # Display pattern on calendar
+        self.cal.pack(pady=10, padx=10, fill="both", expand=True)
+
+        # Buttons frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(pady=(5,0), fill=tk.X)
+        button_frame.columnconfigure(0, weight=1) # Make buttons expand if needed
+        button_frame.columnconfigure(1, weight=1)
+
+
+        ok_button = ttk.Button(button_frame, text="OK", command=self._on_ok, width=12)
+        ok_button.pack(side=tk.LEFT, padx=(0,5), expand=True, fill=tk.X)
+        # ok_button.grid(row=0, column=0, padx=(0,5), sticky="ew")
+
+
+        cancel_button = ttk.Button(button_frame, text="Cancel", command=self._on_cancel, width=12)
+        cancel_button.pack(side=tk.RIGHT, padx=(5,0), expand=True, fill=tk.X)
+        # cancel_button.grid(row=0, column=1, padx=(5,0), sticky="ew")
+
+
+        # --- Centering and Modality ---
+        self.update_idletasks()
+        
+        # Attempt to make the calendar widget itself determine the dialog size
+        # Add some padding around the calendar for a better look
+        padding_x = 40 
+        padding_y = 60 # Extra for buttons
+        dialog_width = self.cal.winfo_reqwidth() + padding_x
+        dialog_height = self.cal.winfo_reqheight() + self.cal.winfo_reqheight()//2 + padding_y # Approximate height for buttons
+
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        x = (screen_width // 2) - (dialog_width // 2)
+        y = (screen_height // 2) - (dialog_height // 2)
+        self.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
+        
+        self.resizable(False, False)
+        self.bind("<Escape>", lambda e: self._on_cancel())
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+
+        self.grab_set() # Make modal
+        self.focus_set()
+        self.cal.focus_set() # Set focus to the calendar
+
+    def _on_ok(self):
+        self.result_date = self.cal.selection_get() # Returns a datetime.date object
+        self.destroy()
+
+    def _on_cancel(self):
+        self.result_date = None
+        self.destroy()
+# --- End Calendar Dialog Class ---
 
 # --- Find/Replace Dialog Class ---
 class FindReplaceDialog(tk.Toplevel):
@@ -197,8 +363,8 @@ class FindReplaceDialog(tk.Toplevel):
                 if not found_pos: continue
 
                 end_pos = f"{found_pos}+{len(find_term)}c"
-                self.text_widget.delete(found_pos, end_pos)
-                self.text_widget.insert(found_pos, replace_term)
+                self.text_area.delete(found_pos, end_pos)
+                self.text_area.insert(found_pos, replace_term)
                 count += 1
                 # Start next search *after* the inserted text
                 start_pos = f"{found_pos}+{len(replace_term)}c"
@@ -435,7 +601,7 @@ class Notepad:
         self.root.bind('<Control-o>', lambda event: self.open_file())
         self.root.bind('<Control-s>', lambda event: self.save_file())
         self.root.bind('<F5>', lambda event: self.insert_sydney_time())
-        self.root.bind('<F6>', lambda event: self.insert_current_date())
+        self.root.bind('<F6>', lambda event: self.prompt_and_insert_date())
         # --- Add Find/Replace Hotkeys ---
         self.root.bind('<Control-f>', lambda event: self.open_find_dialog())
         self.root.bind('<Control-h>', lambda event: self.open_replace_dialog())
@@ -720,16 +886,27 @@ class Notepad:
             messagebox.showerror("Time Error", f"Could not get Sydney time:\n{e}")
     # --- End method to insert Sydney time ---
 
-    # --- Add method to insert current date ---
-    def insert_current_date(self):
-        """Inserts the current date in 'dd MMM yyyy' format at the cursor position."""
-        try:
+    # --- Method to prompt for date and insert it ---
+    def prompt_and_insert_date(self):
+        """Opens a calendar dialog and inserts the selected date."""
+        dialog = CalendarDialog(self.root) # Use the new CalendarDialog
+        self.root.wait_window(dialog) # Make it modal
+
+        if dialog.result_date: # Check the result attribute from CalendarDialog
+            date_obj = dialog.result_date
             # Format: e.g., 23 Jul 2024
-            date_str = datetime.now().strftime("%d %b %Y")
-            self.text_area.insert(tk.INSERT, date_str)
-        except Exception as e:
-            messagebox.showerror("Date Error", f"Could not get current date:\n{e}")
-    # --- End method to insert current date ---
+            date_str = date_obj.strftime("%d %b %Y")
+            
+            original_autoseparators = self.text_area.cget("autoseparators")
+            self.text_area.config(autoseparators=False)
+            try:
+                self.text_area.insert(tk.INSERT, date_str)
+                self.text_area.edit_separator()
+            finally:
+                self.text_area.config(autoseparators=original_autoseparators)
+            
+            # self._update_line_colors() # Optional
+    # --- End method to prompt for date ---
 
     # --- Methods to Open Find/Replace Dialog ---
     def _launch_find_replace_dialog(self, replace_mode=False):
