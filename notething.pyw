@@ -1173,10 +1173,20 @@ class Notepad:
         # If cursor is already at first non-whitespace, go to start of line
         current_column = int(current_cursor_pos.split('.')[1])
         if current_column == first_non_whitespace:
-            self.text_area.mark_set(tk.INSERT, current_line_start)
+            target_pos = current_line_start
         else:
             # Go to first non-whitespace
-            self.text_area.mark_set(tk.INSERT, f"{current_line_start}+{first_non_whitespace}c")
+            target_pos = f"{current_line_start}+{first_non_whitespace}c"
+
+        # Check if Shift is being held down
+        if event and event.state & 0x1:  # 0x1 is the Shift modifier
+            # Extend selection from current cursor position to target
+            self.text_area.tag_remove(tk.SEL, "1.0", tk.END)  # Clear existing selection
+            self.text_area.tag_add(tk.SEL, current_cursor_pos, target_pos)
+            self.text_area.mark_set(tk.INSERT, target_pos)
+        else:
+            # Just move cursor without selection
+            self.text_area.mark_set(tk.INSERT, target_pos)
 
         return "break" # Prevent default Home behavior
     # --- End Smart Home Key Handler ---
