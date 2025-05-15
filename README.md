@@ -11,10 +11,11 @@ Second time - Selects until the beginning of the line
 - Find and Replace Dialog (Ctrl + H)
 
 ## Todo
-- Find and Replace in selction checkbox
-- Open Recent Files ... (Lists the last 5 files recently opened)
-- Open dialog to be for all files by default (not just .txt files)
+X Find and Replace in selction checkbox
+X Open Recent Files ... (Lists the last 5 files recently opened)
+X Open dialog to be for all files by default (not just .txt files)
+T Reopen last file on startup variable (for debugging purposes, bool value)
 
 ## Bugs
-- tkcalendar doesn't open in centre of the screen straight away
-- Find in selction doesn't work because clicking on find dialog takes away focus and selection in main text widget.
+T tkcalendar doesn't open in centre of the screen straight away
+X Find in seletion doesn't work

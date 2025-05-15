@@ -12,101 +12,15 @@ import calendar # <-- Import calendar for month names
 from tkcalendar import Calendar # <-- Import the Calendar widget
 import time # <-- Import time module
 
-# --- Date Picker Dialog Class ---
-class DatePickerDialog(tk.Toplevel):
-    def __init__(self, master):
-        super().__init__(master)
-        self.transient(master)
-        self.title("Select Date")
-        self.result = None # This will store the datetime.date object if selection is valid
-
-        # Get current date for defaults
-        now = datetime.now()
-
-        # --- Variables ---
-        self.day_var = tk.StringVar(value=str(now.day))
-        # calendar.month_abbr is ['', 'Jan', 'Feb', ...], so slice from index 1
-        self.month_abbrs = list(calendar.month_abbr)[1:]
-        self.month_var = tk.StringVar(value=calendar.month_abbr[now.month])
-        self.year_var = tk.StringVar(value=str(now.year))
-
-        # --- UI Elements ---
-        main_frame = ttk.Frame(self, padding="10")
-        main_frame.pack(expand=True, fill=tk.BOTH)
-
-        # Date selection frame
-        date_frame = ttk.Frame(main_frame)
-        date_frame.pack(pady=10)
-
-        ttk.Label(date_frame, text="Day:").grid(row=0, column=0, padx=(0,2), pady=5, sticky="w")
-        self.day_cb = ttk.Combobox(date_frame, textvariable=self.day_var, values=[str(d) for d in range(1, 32)], width=4, state="readonly")
-        self.day_cb.grid(row=0, column=1, padx=(0,10), pady=5)
-
-        ttk.Label(date_frame, text="Month:").grid(row=0, column=2, padx=(0,2), pady=5, sticky="w")
-        self.month_cb = ttk.Combobox(date_frame, textvariable=self.month_var, values=self.month_abbrs, width=6, state="readonly")
-        self.month_cb.grid(row=0, column=3, padx=(0,10), pady=5)
-
-        ttk.Label(date_frame, text="Year:").grid(row=0, column=4, padx=(0,2), pady=5, sticky="w")
-        years = [str(y) for y in range(now.year - 100, now.year + 21)] # Sensible range of years
-        self.year_cb = ttk.Combobox(date_frame, textvariable=self.year_var, values=years, width=6, state="readonly")
-        self.year_cb.grid(row=0, column=5, padx=(0,5), pady=5)
-
-        # Buttons frame
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(pady=(5,0))
-
-        ok_button = ttk.Button(button_frame, text="OK", command=self._on_ok, width=10)
-        ok_button.pack(side=tk.LEFT, padx=5)
-        cancel_button = ttk.Button(button_frame, text="Cancel", command=self._on_cancel, width=10)
-        cancel_button.pack(side=tk.LEFT, padx=5)
-
-        # --- Centering and Modality ---
-        self.update_idletasks() # Allow Tkinter to calculate widget sizes
-        dialog_width = self.winfo_reqwidth()
-        dialog_height = self.winfo_reqheight()
-
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        x = (screen_width // 2) - (dialog_width // 2)
-        y = (screen_height // 2) - (dialog_height // 2)
-        self.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
-        
-        self.resizable(False, False)
-        self.bind("<Escape>", lambda e: self._on_cancel())
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-
-        self.grab_set() # Make modal
-        self.focus_set() 
-        self.day_cb.focus() # Set initial focus to the day combobox
-
-    def _on_ok(self):
-        try:
-            day = int(self.day_var.get())
-            month_str = self.month_var.get()
-            year = int(self.year_var.get())
-
-            if not month_str: # Check if month is empty
-                raise ValueError("Month cannot be empty.")
-
-            month_num = self.month_abbrs.index(month_str) + 1
-            
-            # Validate date by trying to create a datetime object
-            self.result = datetime(year, month_num, day).date()
-            self.destroy()
-        except ValueError: # Handles int conversion, month not found, or invalid date in datetime constructor
-            messagebox.showerror("Invalid Date", "Please select a valid date.", parent=self)
-        except Exception as e:
-            messagebox.showerror("Error", f"An unexpected error occurred: {e}", parent=self)
-
-    def _on_cancel(self):
-        self.result = None
-        self.destroy()
-# --- End Date Picker Dialog Class ---
 
 # --- Calendar Dialog Class (using tkcalendar) ---
 class CalendarDialog(tk.Toplevel):
     def __init__(self, master):
         super().__init__(master)
+        
+        # Hide the window initially until we position it correctly
+        self.withdraw()
+        
         self.transient(master)
         self.title("Select Date")
         self.result_date = None # Will store the selected datetime.date object
@@ -132,26 +46,20 @@ class CalendarDialog(tk.Toplevel):
         button_frame.columnconfigure(0, weight=1) # Make buttons expand if needed
         button_frame.columnconfigure(1, weight=1)
 
-
         ok_button = ttk.Button(button_frame, text="OK", command=self._on_ok, width=12)
         ok_button.pack(side=tk.LEFT, padx=(0,5), expand=True, fill=tk.X)
-        # ok_button.grid(row=0, column=0, padx=(0,5), sticky="ew")
-
 
         cancel_button = ttk.Button(button_frame, text="Cancel", command=self._on_cancel, width=12)
         cancel_button.pack(side=tk.RIGHT, padx=(5,0), expand=True, fill=tk.X)
-        # cancel_button.grid(row=0, column=1, padx=(5,0), sticky="ew")
-
 
         # --- Centering and Modality ---
         self.update_idletasks()
         
-        # Attempt to make the calendar widget itself determine the dialog size
-        # Add some padding around the calendar for a better look
+        # Calculate positioning before showing the window
         padding_x = 40 
-        padding_y = 60 # Extra for buttons
+        padding_y = 60
         dialog_width = self.cal.winfo_reqwidth() + padding_x
-        dialog_height = self.cal.winfo_reqheight() + self.cal.winfo_reqheight()//2 + padding_y # Approximate height for buttons
+        dialog_height = self.cal.winfo_reqheight() + self.cal.winfo_reqheight()//2 + padding_y
 
         screen_width = self.winfo_screenwidth()
         screen_height = self.winfo_screenheight()
@@ -162,8 +70,12 @@ class CalendarDialog(tk.Toplevel):
         self.resizable(False, False)
         self.bind("<Escape>", lambda e: self._on_cancel())
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-
+        
         self.grab_set() # Make modal
+        
+        # Now show the window after everything is set up
+        self.deiconify()
+        
         self.focus_set()
         self.cal.focus_set() # Set focus to the calendar
 
@@ -547,6 +459,10 @@ class Notepad:
     default_window_height = 500
     # ---
 
+    # Add this as a class variable
+    recent_files = []
+    MAX_RECENT_FILES = 5
+
     def __init__(self, root, initial_file=None):
         self.root = root
         # self.root.title("Notething") # Title will be set after checking current_file
@@ -686,6 +602,9 @@ class Notepad:
         # Bind the window close button (X)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close_window)
 
+        # Load recent files when initializing the application
+        self._load_recent_files()
+
     def create_menu(self):
         # tk.Menu is standard, ttk doesn't replace it
         menu_bar = tk.Menu(self.root)
@@ -693,6 +612,12 @@ class Notepad:
         file_menu = tk.Menu(menu_bar, tearoff=0)
         file_menu.add_command(label="New", command=self.new_file, accelerator='Ctrl+N')
         file_menu.add_command(label="Open", command=self.open_file, accelerator='Ctrl+O')
+        
+        # Add submenu for recent files
+        self.recent_menu = tk.Menu(file_menu, tearoff=0)
+        file_menu.add_cascade(label="Open Recent", menu=self.recent_menu)
+        self._update_recent_menu()
+        
         file_menu.add_command(label="Save", command=self.save_file, accelerator='Ctrl+S')
         file_menu.add_command(label="Rename", command=self.rename_file)
         file_menu.add_separator()
@@ -782,27 +707,40 @@ class Notepad:
                 self.text_area.insert(tk.END, file.read())
                 self.current_file = file_path
                 # Update title to include filename only
-                filename = os.path.basename(file_path) # <-- Get filename
-                self.root.title(f"Notething - {filename}") # <-- Use filename in title
+                filename = os.path.basename(file_path)
+                self.root.title(f"Notething - {filename}")
                 status_text = f"Status: Opened {file_path}"
                 self.status_bar.config(text=status_text)
                 self.tooltip.set_text(status_text)
-                self._update_line_colors() # <-- Add call here
+                self._update_line_colors()
+                
+                # Add to recent files list
+                self._add_to_recent_files(file_path)
         except FileNotFoundError:
              messagebox.showerror("Error Opening File", f"File not found:\n{file_path}")
-             self.new_file() # Reset to a new file state if initial file not found
-             self.root.title("Notething") # Reset title
+             self.new_file()
+             self.root.title("Notething")
         except Exception as e:
             messagebox.showerror("Error Opening File", f"Could not open file:\n{e}")
-            self.new_file() # Reset on other errors too
-            self.root.title("Notething") # Reset title
+            self.new_file()
+            self.root.title("Notething")
 
     def open_file(self):
-        file_path = filedialog.askopenfilename(defaultextension=".txt",
-                                                filetypes=[("Text files", "*.txt"),
-                                                           ("All files", "*.*")])
-        if file_path:
-            self._load_file(file_path)
+        """Open a file for editing"""
+        # Show the file dialog with "All Files" as the default option
+        filepath = filedialog.askopenfilename(
+            title="Open File",
+            filetypes=[
+                ("All Files", "*.*"),  # This is now first, so it's the default
+                ("Text Files", "*.txt"),
+                ("Python Files", "*.py;*.pyw"),
+                ("Markdown Files", "*.md"),
+                ("HTML Files", "*.html;*.htm")
+            ]
+        )
+        
+        if filepath:  # If a file was selected (not canceled)
+            self._load_file(filepath)
 
     def save_file(self):
         if self.current_file:  # If a file is already opened
@@ -1328,6 +1266,90 @@ class Notepad:
         # A simpler approach for now: The mainloop exits when the last Tk root is destroyed.
         # The cascading will just continue from the initial point.
         self.root.destroy()
+
+    def _add_to_recent_files(self, filepath):
+        """Add a file to the recent files list"""
+        # Convert to absolute path
+        filepath = os.path.abspath(filepath)
+        
+        # If the file is already in the list, remove it (to move it to the top)
+        if filepath in Notepad.recent_files:
+            Notepad.recent_files.remove(filepath)
+            
+        # Add to the beginning of the list
+        Notepad.recent_files.insert(0, filepath)
+        
+        # Limit the list to MAX_RECENT_FILES
+        while len(Notepad.recent_files) > Notepad.MAX_RECENT_FILES:
+            Notepad.recent_files.pop()
+            
+        # Update the menu
+        self._update_recent_menu()
+        
+        # Save the list to a file
+        self._save_recent_files()
+        
+    def _update_recent_menu(self):
+        """Update the recent files menu"""
+        # Clear the current menu
+        self.recent_menu.delete(0, tk.END)
+        
+        if not Notepad.recent_files:
+            # If no recent files, add a disabled item
+            self.recent_menu.add_command(label="No recent files", state=tk.DISABLED)
+        else:
+            # Add each recent file to the menu
+            for i, filepath in enumerate(Notepad.recent_files):
+                # Get just the filename for display
+                filename = os.path.basename(filepath)
+                # Create a lambda that captures the current filepath
+                self.recent_menu.add_command(
+                    label=f"{i+1}. {filename}",
+                    command=lambda path=filepath: self._load_file(path)
+                )
+                
+            # Add a separator and a clear option
+            self.recent_menu.add_separator()
+            self.recent_menu.add_command(label="Clear Recent Files", command=self._clear_recent_files)
+    
+    def _clear_recent_files(self):
+        """Clear the list of recent files"""
+        Notepad.recent_files = []
+        self._update_recent_menu()
+        self._save_recent_files()
+        
+    def _save_recent_files(self):
+        """Save the recent files list to a file"""
+        try:
+            config_dir = os.path.join(os.path.expanduser("~"), ".notething")
+            os.makedirs(config_dir, exist_ok=True)
+            
+            recent_file_path = os.path.join(config_dir, "recent_files.txt")
+            with open(recent_file_path, 'w', encoding='utf-8') as f:
+                for filepath in Notepad.recent_files:
+                    f.write(f"{filepath}\n")
+        except Exception as e:
+            print(f"Error saving recent files: {e}")
+    
+    def _load_recent_files(self):
+        """Load the recent files list from a file"""
+        try:
+            config_dir = os.path.join(os.path.expanduser("~"), ".notething")
+            recent_file_path = os.path.join(config_dir, "recent_files.txt")
+            
+            if os.path.exists(recent_file_path):
+                with open(recent_file_path, 'r', encoding='utf-8') as f:
+                    Notepad.recent_files = [line.strip() for line in f if line.strip()]
+                    
+                # Limit to MAX_RECENT_FILES
+                while len(Notepad.recent_files) > Notepad.MAX_RECENT_FILES:
+                    Notepad.recent_files.pop()
+                    
+                # Update the menu if it exists
+                if hasattr(self, 'recent_menu'):
+                    self._update_recent_menu()
+        except Exception as e:
+            print(f"Error loading recent files: {e}")
 
 if __name__ == "__main__":
     # --- Argument Parsing ---
