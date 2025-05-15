@@ -462,11 +462,12 @@ class Notepad:
     # Add this as a class variable
     recent_files = []
     MAX_RECENT_FILES = 5
+    reopen_last_file = True 
 
     def __init__(self, root, initial_file=None):
         self.root = root
-        # self.root.title("Notething") # Title will be set after checking current_file
-
+        self.root.title("Notething")
+        
         Notepad.open_window_count += 1
 
         # --- Window Positioning and Sizing ---
@@ -591,9 +592,18 @@ class Notepad:
         self.text_area.bind("<Shift-Home>", self._handle_home_key)  # Add explicit Shift-Home binding
         # --- End Home Binding ---
 
-        # Load initial file if provided
+        # Set up our keyboard shortcuts/bindings
+        self._setup_key_bindings()
+
+        # Load settings and recent files
+        self._load_settings()
+
+        # Load initial file if provided, or last file if setting enabled
         if initial_file:
             self._load_file(initial_file)
+        elif Notepad.reopen_last_file and Notepad.recent_files:
+            # Reopen the most recently used file
+            self._load_file(Notepad.recent_files[0])
         else:
             # Ensure initial coloring is applied even for an empty new file
             self._update_line_colors()
@@ -601,9 +611,6 @@ class Notepad:
 
         # Bind the window close button (X)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close_window)
-
-        # Load recent files when initializing the application
-        self._load_recent_files()
 
     def create_menu(self):
         # tk.Menu is standard, ttk doesn't replace it
@@ -957,7 +964,7 @@ class Notepad:
             finally:
                 self.text_area.config(autoseparators=original_autoseparators)
             
-            # self._update_line_colors() # Optional
+            self._update_line_colors()
     # --- End method to prompt for date ---
 
     # --- Methods to Open Find/Replace Dialog ---
@@ -1248,6 +1255,7 @@ class Notepad:
             else:
                 self.text_area.tag_add(tk.SEL, target_pos, anchor)
             self.text_area.mark_set(tk.INSERT, target_pos)
+
         else:
             # Just move cursor without selection
             self.text_area.mark_set(tk.INSERT, target_pos)
@@ -1350,6 +1358,112 @@ class Notepad:
                     self._update_recent_menu()
         except Exception as e:
             print(f"Error loading recent files: {e}")
+
+    def _setup_key_bindings(self):
+        """Setup keyboard shortcuts/bindings."""
+        # Existing key bindings...
+        
+        # Add bindings for Ctrl+Home and Ctrl+End navigation
+        self.text_area.bind("<Control-Home>", self._handle_ctrl_home)
+        self.text_area.bind("<Control-End>", self._handle_ctrl_end)
+        
+        # Also handle the shift variants for selection
+        self.text_area.bind("<Control-Shift-Home>", self._handle_ctrl_home)
+        self.text_area.bind("<Control-Shift-End>", self._handle_ctrl_end)
+        
+        # ...other bindings
+
+    def _handle_ctrl_home(self, event=None):
+        """Handle Ctrl+Home to move to the beginning of the document."""
+        current_pos = self.text_area.index(tk.INSERT)
+        
+        # If Shift is pressed, extend the selection
+        if event.state & 0x1:  # 0x1 is the Shift modifier
+            try:
+                # If there's already a selection, maintain its end
+                sel_end = self.text_area.index(tk.SEL_LAST)
+                self.text_area.tag_add(tk.SEL, "1.0", sel_end)
+            except tk.TclError:
+                # If no selection, create one from current pos to start
+                self.text_area.tag_add(tk.SEL, "1.0", current_pos)
+        
+        # Move cursor to the beginning of the document
+        self.text_area.mark_set(tk.INSERT, "1.0")
+        
+        # Make sure the beginning is visible
+        self.text_area.see("1.0")
+       
+        return "break"  # Prevent default behavior
+
+    def _handle_ctrl_end(self, event=None):
+        """Handle Ctrl+End to move to the end of the document."""
+        current_pos = self.text_area.index(tk.INSERT)
+        end_pos = self.text_area.index(tk.END)
+        
+        # If Shift is pressed, extend the selection
+        if event.state & 0x1:  # 0x1 is the Shift modifier
+            try:
+                # If there's already a selection, maintain its start
+                sel_start = self.text_area.index(tk.SEL_FIRST)
+                self.text_area.tag_remove(tk.SEL, "1.0", tk.END)
+                self.text_area.tag_add(tk.SEL, sel_start, end_pos)
+            except tk.TclError:
+                # If no selection, create one from current pos to end
+                self.text_area.tag_add(tk.SEL, current_pos, end_pos)
+        
+        # Move cursor to the end of the document
+        self.text_area.mark_set(tk.INSERT, end_pos)
+        
+        # Make sure the end is visible
+        self.text_area.see(end_pos)
+        
+        return "break"  # Prevent default behavior
+
+    def _save_settings(self):
+        """Save all application settings to file"""
+        try:
+            config_dir = os.path.join(os.path.expanduser("~"), ".notething")
+            os.makedirs(config_dir, exist_ok=True)
+            
+            settings_path = os.path.join(config_dir, "settings.txt")
+            with open(settings_path, 'w', encoding='utf-8') as f:
+                # Save settings as key=value pairs
+                f.write(f"reopen_last_file={int(Notepad.reopen_last_file)}\n")
+                
+            # Also save recent files
+            self._save_recent_files()
+        except Exception as e:
+            print(f"Error saving settings: {e}")
+    
+    def _load_settings(self):
+        """Load application settings from file"""
+        try:
+            config_dir = os.path.join(os.path.expanduser("~"), ".notething")
+            settings_path = os.path.join(config_dir, "settings.txt")
+            
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        if '=' in line:
+                            key, value = line.strip().split('=', 1)
+                            if key == "reopen_last_file":
+                                Notepad.reopen_last_file = bool(int(value))
+            
+            # Also load recent files
+            self._load_recent_files()
+        except Exception as e:
+            print(f"Error loading settings: {e}")
+    
+    def _toggle_reopen_last_file(self):
+        """Toggle the reopen last file setting"""
+        Notepad.reopen_last_file = not Notepad.reopen_last_file
+        self._save_settings()
+        
+        # Update the menu checkmark
+        if Notepad.reopen_last_file:
+            self.options_menu.entryconfig("Reopen Last File on Startup", selectcolor="black")
+        else:
+            self.options_menu.entryconfig("Reopen Last File on Startup", selectcolor="white")
 
 if __name__ == "__main__":
     # --- Argument Parsing ---
