@@ -10,6 +10,7 @@ import pytz # <-- Import pytz for timezone handling
 import tkinter.simpledialog # Already imported, but ensure it's there
 import calendar # <-- Import calendar for month names
 from tkcalendar import Calendar # <-- Import the Calendar widget
+import time # <-- Import time module
 
 # --- Date Picker Dialog Class ---
 class DatePickerDialog(tk.Toplevel):
@@ -178,32 +179,61 @@ class CalendarDialog(tk.Toplevel):
 # --- Find/Replace Dialog Class ---
 class FindReplaceDialog(tk.Toplevel):
     def __init__(self, master, text_widget, replace_mode=False):
-        super().__init__(master)
+        # Store references before creating the dialog
         self.text_widget = text_widget
-
+        self.master = master
+        
+        # Store the current selection before creating the Toplevel
+        try:
+            self.initial_sel_start = self.text_widget.index(tk.SEL_FIRST)
+            self.initial_sel_end = self.text_widget.index(tk.SEL_LAST)
+            has_selection = True
+        except tk.TclError:
+            self.initial_sel_start = None
+            self.initial_sel_end = None
+            has_selection = False
+        
+        # Create a super unique tag name for preserving selection
+        self.preserved_sel_tag = f"preserved_selection_{id(self)}_{time.time()}"
+        
+        # Apply the preserved selection tag (using the same colors as normal selection)
+        if has_selection:
+            self.text_widget.tag_configure(self.preserved_sel_tag, 
+                                          background="lightgrey", 
+                                          foreground="black")
+            self.text_widget.tag_add(self.preserved_sel_tag, 
+                                    self.initial_sel_start, 
+                                    self.initial_sel_end)
+            
+        # Now create the dialog
+        super().__init__(master)
+        
+        # Configure dialog and setup UI
         self.title("Find" if not replace_mode else "Find and Replace")
-        # Set initial size *before* centering
+        
+        # Configure dialog
         dialog_width = 350
         dialog_height = 150
-        self.geometry(f"{dialog_width}x{dialog_height}")
         self.resizable(False, False)
-        self.transient(master) # Keep dialog on top of the main window
+        self.transient(master)
 
-        # --- Center the dialog window ---
-        self.update_idletasks() # Ensure window dimensions are calculated
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        # Use the requested width/height, not winfo_width/height which might not be ready
-        x = (screen_width // 2) - (dialog_width // 2)
-        y = (screen_height // 2) - (dialog_height // 2)
-        self.geometry(f"+{x}+{y}") # Reposition using calculated coordinates
-        # --- End Centering ---
+        # Center the dialog relative to the main window
+        window_x = master.winfo_rootx()
+        window_y = master.winfo_rooty()
+        window_width = master.winfo_width()
+        window_height = master.winfo_height()
+        
+        x = window_x + (window_width // 2) - (dialog_width // 2)
+        y = window_y + (window_height // 2) - (dialog_height // 2)
+        
+        # Set size and position in one call
+        self.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
 
         # Variables for entries and checkbox
         self.find_what_var = tk.StringVar()
         self.replace_with_var = tk.StringVar()
         self.match_case_var = tk.BooleanVar()
-        self.find_in_selection_var = tk.BooleanVar() # <-- Add new variable
+        self.find_in_selection_var = tk.BooleanVar()
 
         # --- UI Elements ---
         # Frame for entries
@@ -249,7 +279,7 @@ class FindReplaceDialog(tk.Toplevel):
 
         # --- Initial Focus and Bindings ---
         self.find_entry.focus_set() # Start cursor in "Find what"
-        self.protocol("WM_DELETE_WINDOW", self.destroy) # Handle closing via 'X' button
+        self.protocol("WM_DELETE_WINDOW", self._cleanup_tags_and_destroy) # Handle closing via 'X' button
 
         # Bind Enter key in find entry to Find Next
         self.find_entry.bind("<Return>", lambda event: self.find_next())
@@ -257,71 +287,129 @@ class FindReplaceDialog(tk.Toplevel):
              self.replace_entry.bind("<Return>", lambda event: self.replace())
 
         # --- Bind Escape key to close the dialog ---
-        self.bind("<Escape>", lambda event: self.destroy())
+        self.bind("<Escape>", lambda event: self._cleanup_tags_and_destroy())
         # --- End Escape Binding ---
 
         # Store last search position
         self.last_pos = "1.0"
 
+        # Set "Find in selection" checkbox if there's a preserved selection
+        if has_selection:
+            self.find_in_selection_var.set(True)
+        
+        # Make dialog modal
+        self.grab_set()
+        self.focus_set()
+        
+        # Bind dialog destruction to cleanup the preserved selection tag
+        self.bind("<Destroy>", self._cleanup_tags)
+
+    def _cleanup_tags_and_destroy(self, event=None):
+        """Clean up tags and then destroy the dialog"""
+        self._cleanup_tags()
+        self.destroy()
+
+    def _cleanup_tags(self, event=None):
+        """Remove custom tags when the dialog is destroyed"""
+        try:
+            # Clear ALL selections and custom tags
+            self.text_widget.tag_remove(tk.SEL, "1.0", tk.END)
+            self.text_widget.tag_remove(self.preserved_sel_tag, "1.0", tk.END)
+            self.text_widget.tag_remove("search_highlight", "1.0", tk.END)
+            
+            # Delete the custom tag completely
+            self.text_widget.tag_delete(self.preserved_sel_tag)
+            
+        except tk.TclError:
+            pass  # Widget might already be gone
+
     def find_next(self):
-        # --- Refined Find logic using custom highlight ---
         find_term = self.find_what_var.get()
         if not find_term:
             messagebox.showwarning("Find", "Please enter text to find.", parent=self)
             return
 
-        # Remove previous highlight *before* searching
+        # Remove previous highlight
         self.text_widget.tag_remove("search_highlight", "1.0", tk.END)
 
-        # Get search boundaries based on find_in_selection setting
-        try:
-            if self.find_in_selection_var.get():
-                # Get selection range
-                sel_start = self.text_widget.index(tk.SEL_FIRST)
-                sel_end = self.text_widget.index(tk.SEL_LAST)
-                # If cursor is outside selection, start from selection start
-                if self.text_widget.compare(tk.INSERT, "<", sel_start) or \
-                   self.text_widget.compare(tk.INSERT, ">", sel_end):
-                    start_pos = sel_start
-                else:
-                    start_pos = self.text_widget.index(tk.INSERT)
-                stop_index = sel_end
-            else:
+        # Get search boundaries
+        if self.find_in_selection_var.get():
+            if self.initial_sel_start and self.initial_sel_end:
+                # When searching in selection, use the boundaries from our preserved selection
                 start_pos = self.text_widget.index(tk.INSERT)
-                stop_index = tk.END
-        except tk.TclError: # No selection
-            if self.find_in_selection_var.get():
+                stop_index = self.initial_sel_end
+
+                # If cursor is outside selection, move it to the beginning of the selection
+                if (self.text_widget.compare(start_pos, "<", self.initial_sel_start) or
+                    self.text_widget.compare(start_pos, ">", self.initial_sel_end)):
+                    start_pos = self.initial_sel_start
+            else:
                 messagebox.showwarning("Find", "No text selected.", parent=self)
                 return
+        else:
             start_pos = self.text_widget.index(tk.INSERT)
             stop_index = tk.END
 
+        # Perform the search
         nocase = not self.match_case_var.get()
-        # Search from start_pos to the stop_index
         found_pos = self.text_widget.search(find_term, start_pos, stopindex=stop_index, nocase=nocase)
 
         if found_pos:
+            # Found a match in the current direction
             end_pos = f"{found_pos}+{len(find_term)}c"
+            
+            # Apply search highlight
             self.text_widget.tag_add("search_highlight", found_pos, end_pos)
-            self.text_widget.see(found_pos) # Scroll to make it visible
-            # Move INSERT mark to the END of the found text for the next search
+            
+            # Ensure search highlight is on top ONLY if we have a preserved selection
+            if self.initial_sel_start and self.initial_sel_end:
+                try:
+                    self.text_widget.tag_raise("search_highlight", self.preserved_sel_tag)
+                except tk.TclError:
+                    # In case the tag was removed or isn't defined
+                    pass
+            
+            # Make sure the found text is visible
+            self.text_widget.see(found_pos)
+            
+            # Move cursor to end of found text for next search
             self.text_widget.mark_set(tk.INSERT, end_pos)
-            self.lift() # Bring dialog to front
+            
+            # Bring dialog back to front
+            self.lift()
         else:
-            if not self.find_in_selection_var.get():
-                # Only wrap around if not searching in selection
-                # If not found from cursor to end, wrap around and search from beginning to cursor
-                found_pos = self.text_widget.search(find_term, "1.0", stopindex=start_pos, nocase=nocase)
+            # No match found in the current direction, offer to wrap around
+            if self.find_in_selection_var.get():
+                # For search in selection, wrap from selection start
+                wrap_start = self.initial_sel_start
+                wrap_message = "Reached the end of the selection. Continue from the beginning of the selection?"
+            else:
+                # For normal search, wrap from document start
+                wrap_start = "1.0"
+                wrap_message = "Reached the end of the document. Continue from the beginning?"
+            
+            if messagebox.askyesno("Find", wrap_message, parent=self):
+                # Try searching from the beginning
+                found_pos = self.text_widget.search(find_term, wrap_start, stopindex=start_pos, nocase=nocase)
                 if found_pos:
                     end_pos = f"{found_pos}+{len(find_term)}c"
                     self.text_widget.tag_add("search_highlight", found_pos, end_pos)
+                    
+                    # Only try to raise tag if we have a preserved selection
+                    if self.initial_sel_start and self.initial_sel_end:
+                        try:
+                            self.text_widget.tag_raise("search_highlight", self.preserved_sel_tag)
+                        except tk.TclError:
+                            pass
+                        
                     self.text_widget.see(found_pos)
                     self.text_widget.mark_set(tk.INSERT, end_pos)
                     self.lift()
                 else:
                     messagebox.showinfo("Find", f"Cannot find '{find_term}'", parent=self)
             else:
-                messagebox.showinfo("Find", f"Cannot find '{find_term}' in selection", parent=self)
+                # User chose not to wrap around, so do nothing
+                pass
 
     def replace(self):
         # --- Refined Replace logic ---
@@ -329,27 +417,10 @@ class FindReplaceDialog(tk.Toplevel):
         replace_term = self.replace_with_var.get()
         nocase = not self.match_case_var.get()
 
-        # Check if we're in selection mode and if there's a selection
-        if self.find_in_selection_var.get():
-            try:
-                sel_start = self.text_widget.index(tk.SEL_FIRST)
-                sel_end = self.text_widget.index(tk.SEL_LAST)
-            except tk.TclError:
-                messagebox.showwarning("Replace", "No text selected.", parent=self)
-                return
-
         # Check if the currently highlighted search result matches the find term
         highlight_range = self.text_widget.tag_ranges("search_highlight")
         if highlight_range:
             hl_start, hl_end = highlight_range
-            
-            # If in selection mode, verify the highlight is within the selection
-            if self.find_in_selection_var.get():
-                if self.text_widget.compare(hl_start, "<", sel_start) or \
-                   self.text_widget.compare(hl_end, ">", sel_end):
-                    self.find_next() # Find next occurrence within selection
-                    return
-
             highlighted_text = self.text_widget.get(hl_start, hl_end)
 
             # Compare highlighted text with find_term (respecting case option)
@@ -361,11 +432,13 @@ class FindReplaceDialog(tk.Toplevel):
                 self.text_widget.tag_remove("search_highlight", hl_start, hl_end)
                 self.text_widget.delete(hl_start, hl_end)
                 self.text_widget.insert(hl_start, replace_term)
-                # Move cursor to end of replaced text
+                # Move cursor to end of replaced text - this becomes the start for the *next* find
                 self.text_widget.mark_set(tk.INSERT, f"{hl_start}+{len(replace_term)}c")
-                return
+                # DO NOT automatically find next here. Let the user click Find Next again.
+                return # Stop after successful replace
 
-        # If no highlight matches the find term, just find the next occurrence
+        # If no highlight matches the find term,
+        # just find the next occurrence (as if Find Next was clicked).
         self.find_next()
         # --- End Refined Replace logic ---
 
@@ -379,51 +452,48 @@ class FindReplaceDialog(tk.Toplevel):
             messagebox.showwarning("Replace All", "Please enter text to find.", parent=self)
             return
 
-        # Get search boundaries based on find_in_selection setting
-        try:
-            if self.find_in_selection_var.get():
-                start_pos = self.text_widget.index(tk.SEL_FIRST)
-                stop_index = self.text_widget.index(tk.SEL_LAST)
-            else:
-                start_pos = "1.0"
-                stop_index = tk.END
-        except tk.TclError: # No selection
-            if self.find_in_selection_var.get():
-                messagebox.showwarning("Replace All", "No text selected.", parent=self)
-                return
-            start_pos = "1.0"
-            stop_index = tk.END
-
         # --- Remove any existing highlight before starting ---
         self.text_widget.tag_remove("search_highlight", "1.0", tk.END)
 
         count = 0
-        current_pos = start_pos
+        start_pos = "1.0"
 
-        original_autoseparators = self.text_widget.cget("autoseparators")
-        self.text_widget.config(autoseparators=False)
+        # --- Temporarily disable auto separators for single undo ---
         try:
+            original_autoseparators = self.text_widget.cget("autoseparators")
+            self.text_widget.config(autoseparators=False)
+
             while True:
-                found_pos = self.text_widget.search(find_term, current_pos, stopindex=stop_index, nocase=nocase)
+                found_pos = self.text_widget.search(find_term, start_pos, stopindex=tk.END, nocase=nocase, count=tk.IntVar())
                 if not found_pos:
-                    break
+                    break # No more occurrences
+
+                # Check if found_pos is valid before proceeding
+                if not found_pos: continue
 
                 end_pos = f"{found_pos}+{len(find_term)}c"
-                self.text_widget.delete(found_pos, end_pos)
-                self.text_widget.insert(found_pos, replace_term)
+                self.text_area.delete(found_pos, end_pos)
+                self.text_area.insert(found_pos, replace_term)
                 count += 1
-                current_pos = f"{found_pos}+{len(replace_term)}c"
+                # Start next search *after* the inserted text
+                start_pos = f"{found_pos}+{len(replace_term)}c"
 
+            # --- Manually add undo separator *if* changes were made ---
             if count > 0:
                 self.text_widget.edit_separator()
-                messagebox.showinfo("Replace All", f"Replaced {count} occurrence(s).", parent=self)
-                if hasattr(self.master, '_update_line_colors'):
-                    self.master._update_line_colors()
-            else:
-                messagebox.showinfo("Replace All", f"Cannot find '{find_term}'", parent=self)
+
         finally:
+            # --- Always restore original autoseparator setting ---
             self.text_widget.config(autoseparators=original_autoseparators)
         # --- End single undo step logic ---
+
+        if count > 0:
+             messagebox.showinfo("Replace All", f"Replaced {count} occurrence(s).", parent=self)
+             # Update line colors only if changes were made
+             self._update_line_colors() # Call helper method
+        else:
+             messagebox.showinfo("Replace All", f"Cannot find '{find_term}'", parent=self)
+        # --- End Replace All logic ---
 
     # Need access to the main app's color update method
     def _update_line_colors(self):
@@ -530,17 +600,17 @@ class Notepad:
         self.bold_font = tkFont.Font(root=self.root, family="Consolas", size=11, weight="bold") # New bold font
         self.text_area = tk.Text(
             text_frame, # Place text area in the frame
-            wrap='word',
+            wrap=tk.WORD,
             font=self.font,
             padx=10,
             pady=10,
             undo=True,  # <-- Enable undo/redo stack
-            maxundo=0,  # <-- 0 means unlimited undo levels
+            maxundo=-1,  # <-- -1 means unlimited undo levels
             autoseparators=True,  # <-- Automatically separate undo operations
+            exportselection=False,  # <-- This is the key change that keeps selection visible when focus is lost
             yscrollcommand=self.scrollbar.set, # Link text area scroll to scrollbar
             selectbackground="lightgrey", # <-- Change selection background back to lightgrey
             selectforeground="black",      # Keep selection text black
-            exportselection=False          # <-- Keep selection visible without focus
         )
         self.text_area.pack(expand=True, fill='both', side=tk.LEFT) # Pack text area after scrollbar
 
@@ -552,7 +622,7 @@ class Notepad:
         self.text_area.tag_configure("maroon_line", foreground="maroon") # New maroon tag
         self.text_area.tag_configure("bold_line", font=self.bold_font)   # New bold tag
         # --- Add Custom Search Highlight Tag ---
-        self.text_area.tag_configure("search_highlight", background="yellow", foreground="black")
+        self.text_area.tag_configure("search_highlight", background="darkorange", foreground="white")
         # --- End Tag Configuration ---
 
         # --- Drag and Drop Setup ---

@@ -13,6 +13,7 @@ Second time - Selects until the beginning of the line
 ## Todo
 - Find and Replace in selction checkbox
 - Open Recent Files ... (Lists the last 5 files recently opened)
+- Open dialog to be for all files by default (not just .txt files)
 
 ## Bugs
 - tkcalendar doesn't open in centre of the screen straight away
