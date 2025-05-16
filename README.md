@@ -16,6 +16,13 @@ X Open Recent Files ... (Lists the last 5 files recently opened)
 X Open dialog to be for all files by default (not just .txt files)
 X Reopen last file on startup variable (for debugging purposes, bool value)
 X After pressing F6, press enter to accept selected date on calendar picker
+T Create a settings dialog
+T Create a mixin that makes sure that all dialogs are opened in the centre of the screen
+T Suppress default text widget behaviours
+	T Ctrl + K  # Delete line from cursor to end
+	T Ctrl + D  # Delete character after cursor
+	T Ctrl + O  # Inserts newline
+X Remember match case settings
 
 ## Bugs
 X tkcalendar doesn't open in centre of the screen straight away
@@ -32,9 +39,12 @@ X After replacing, it should automatically find the next instance (ready for rep
 T Pressing enter a few time on line with heading doesn't work as expected
 T Arrow keys doesn't move dates on calendar
 
-T asdfasf 09:03 AM 17 May 2025 21 May 2025
+# Test Area
+
+T asdfasf 
 T asdfasf
-T asdfasf
+T asdfasfa
+
 
 # Study
 
@@ -49,3 +59,7 @@ These custom tags served multiple purposes: they maintained visual feedback for 
 The bug report initially pointed to an issue where using "Find and Replace in selection" deleted existing newlines, but deeper investigation revealed a broader problem: pressing Ctrl+H deleted characters even before the replace dialog appeared. This behaviour was traced to a default binding in Tkinter’s Text widget, where Ctrl+H historically acts as a backspace. As a result, when Ctrl+H was pressed, the widget’s default backspace action occurred before the application's own binding opened the replace dialog, leading to unexpected deletions.
 
 The fix involved binding Ctrl+H directly to the Text widget and returning "break" to prevent the default backspace behaviour from executing. This ensured that only the desired action—the dialog opening—occurred. The key takeaway is that bug reports may highlight a specific symptom of a more general issue, and effective debugging often requires understanding default widget behaviours and event-handling order within the GUI framework.
+
+# Taming Tkinter's Text Widget: Understanding and Overriding Emacs-Style Default Keybindings
+
+Tkinter's Text widget comes with numerous default keybindings inherited from Emacs, which can surprise developers expecting Windows-style behavior. These include unexpected actions like Ctrl+O inserting a newline, Ctrl+H acting as backspace, Ctrl+D deleting characters, and various Alt/Meta key combinations for word navigation and deletion. To create a modern text editor experience, it's important to explicitly override these default bindings using bind() with return "break" to prevent the default behavior, and then implement the expected Windows-style shortcuts that users are familiar with, such as Ctrl+O for file operations and Ctrl+H for find/replace functionality.

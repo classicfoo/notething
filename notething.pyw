@@ -12,18 +12,39 @@ import calendar # <-- Import calendar for month names
 from tkcalendar import Calendar # <-- Import the Calendar widget
 import time # <-- Import time module
 
-
-# --- Calendar Dialog Class (using tkcalendar) ---
-class CalendarDialog(tk.Toplevel):
-    def __init__(self, master):
-        super().__init__(master)
-        
+# Add this class before the other dialog classes
+class CenterDialogMixin:
+    """Mixin class to center dialogs on screen."""
+    def center_dialog(self):
+        """Centers the dialog on screen."""
         # Hide the window initially until we position it correctly
         self.withdraw()
         
+        # Update window size calculations
+        self.update_idletasks()
+        
+        # Get window and screen dimensions
+        window_width = self.winfo_reqwidth()
+        window_height = self.winfo_reqheight()
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        
+        # Calculate position
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        
+        # Set position and show window
+        self.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        self.deiconify()
+
+# --- Calendar Dialog Class (using tkcalendar) ---
+class CalendarDialog(tk.Toplevel, CenterDialogMixin):
+    def __init__(self, master):
+        super().__init__(master)
+        
         self.transient(master)
         self.title("Select Date")
-        self.result_date = None # Will store the selected datetime.date object
+        self.result_date = None
 
         # Get current date for initial display
         now = datetime.now()
@@ -33,17 +54,17 @@ class CalendarDialog(tk.Toplevel):
 
         # Create the Calendar widget
         self.cal = Calendar(main_frame,
-                            selectmode='day', # Allow selecting a single day
+                            selectmode='day',
                             year=now.year,
                             month=now.month,
                             day=now.day,
-                            date_pattern='dd/mm/yyyy') # Display pattern on calendar
+                            date_pattern='dd/mm/yyyy')
         self.cal.pack(pady=10, padx=10, fill="both", expand=True)
 
         # Buttons frame
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(pady=(5,0), fill=tk.X)
-        button_frame.columnconfigure(0, weight=1) # Make buttons expand if needed
+        button_frame.columnconfigure(0, weight=1)
         button_frame.columnconfigure(1, weight=1)
 
         ok_button = ttk.Button(button_frame, text="OK", command=self._on_ok, width=12)
@@ -52,36 +73,18 @@ class CalendarDialog(tk.Toplevel):
         cancel_button = ttk.Button(button_frame, text="Cancel", command=self._on_cancel, width=12)
         cancel_button.pack(side=tk.RIGHT, padx=(5,0), expand=True, fill=tk.X)
 
-        # --- Centering and Modality ---
-        self.update_idletasks()
-        
-        # Calculate positioning before showing the window
-        padding_x = 40 
-        padding_y = 60
-        dialog_width = self.cal.winfo_reqwidth() + padding_x
-        dialog_height = self.cal.winfo_reqheight() + self.cal.winfo_reqheight()//2 + padding_y
-
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        x = (screen_width // 2) - (dialog_width // 2)
-        y = (screen_height // 2) - (dialog_height // 2)
-        self.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
-        
         self.resizable(False, False)
         self.bind("<Escape>", lambda e: self._on_cancel())
+        self.bind("<Return>", lambda e: self._on_ok())
+        self.cal.bind("<Return>", lambda e: self._on_ok())
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         
-        self.grab_set() # Make modal
+        # Center the dialog
+        self.center_dialog()
         
-        # Now show the window after everything is set up
-        self.deiconify()
-        
+        self.grab_set()
         self.focus_set()
-        self.cal.focus_set() # Set focus to the calendar
-
-        # Add Enter key binding to accept selected date
-        self.bind("<Return>", lambda e: self._on_ok())
-        self.cal.bind("<Return>", lambda e: self._on_ok())  # Also bind to calendar widget
+        self.cal.focus_set()
 
     def _on_ok(self):
         self.result_date = self.cal.selection_get() # Returns a datetime.date object
@@ -93,7 +96,7 @@ class CalendarDialog(tk.Toplevel):
 # --- End Calendar Dialog Class ---
 
 # --- Find/Replace Dialog Class ---
-class FindReplaceDialog(tk.Toplevel):
+class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
     def __init__(self, master, text_widget, replace_mode=False):
         # Store references before creating the dialog
         self.text_widget = text_widget
@@ -112,7 +115,7 @@ class FindReplaceDialog(tk.Toplevel):
         # Create a super unique tag name for preserving selection
         self.preserved_sel_tag = f"preserved_selection_{id(self)}_{time.time()}"
         
-        # Apply the preserved selection tag (using the same colors as normal selection)
+        # Apply the preserved selection tag
         if has_selection:
             self.text_widget.tag_configure(self.preserved_sel_tag, 
                                           background="lightgrey", 
@@ -121,29 +124,13 @@ class FindReplaceDialog(tk.Toplevel):
                                     self.initial_sel_start, 
                                     self.initial_sel_end)
             
-        # Now create the dialog
+        # Create the dialog
         super().__init__(master)
         
-        # Configure dialog and setup UI
-        self.title("Find" if not replace_mode else "Find and Replace")
-        
         # Configure dialog
-        dialog_width = 400
-        dialog_height = 150
-        self.resizable(False, False)
+        self.title("Find" if not replace_mode else "Find and Replace")
         self.transient(master)
-
-        # Center the dialog relative to the main window
-        window_x = master.winfo_rootx()
-        window_y = master.winfo_rooty()
-        window_width = master.winfo_width()
-        window_height = master.winfo_height()
-        
-        x = window_x + (window_width // 2) - (dialog_width // 2)
-        y = window_y + (window_height // 2) - (dialog_height // 2)
-        
-        # Set size and position in one call
-        self.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
+        self.resizable(False, False)
 
         # Variables for entries and checkbox
         self.find_what_var = tk.StringVar()
@@ -213,12 +200,13 @@ class FindReplaceDialog(tk.Toplevel):
         if has_selection:
             self.find_in_selection_var.set(True)
         
-        # Make dialog modal
+        # Center the dialog
+        self.center_dialog()
+        
+        # Set focus and make modal
         self.grab_set()
         self.focus_set()
-        
-        # Bind dialog destruction to cleanup the preserved selection tag
-        self.bind("<Destroy>", self._cleanup_custom_tags)
+        self.find_entry.focus_set()
 
     def _cleanup_custom_tags_and_destroy(self, event=None):
         """Clean up tags and then destroy the dialog"""
@@ -491,6 +479,9 @@ class Notepad:
     recent_files = []
     MAX_RECENT_FILES = 5
     reopen_last_file = True 
+
+    # Add this with other class variables at the start of Notepad class
+    last_match_case_setting = False  # Default to case-insensitive search
 
     def __init__(self, root, initial_file=None):
         self.root = root
@@ -1000,22 +991,18 @@ class Notepad:
     def _launch_find_replace_dialog(self, replace_mode=False):
         if self.find_dialog is not None:
             try:
-                # If window exists but was closed/destroyed, this will raise TclError
                 self.find_dialog.lift()
-                # If it's already a replace dialog but user wants find, or vice-versa,
-                # maybe recreate it? For now, just lift existing.
-                # A better approach might be a single dialog that shows/hides replace widgets.
-                return # Already open
+                return
             except tk.TclError:
-                self.find_dialog = None # It was destroyed, clear reference
+                self.find_dialog = None
 
         self.find_dialog = FindReplaceDialog(self.root, self.text_area, replace_mode=replace_mode)
 
-        # Pre-fill with last search values
+        # Pre-fill with last search values and match case setting
         self.find_dialog.find_what_var.set(self.last_find_text)
         if replace_mode:
             self.find_dialog.replace_with_var.set(self.last_replace_text)
-        self.find_dialog.match_case_var.set(self.last_match_case)
+        self.find_dialog.match_case_var.set(Notepad.last_match_case_setting)  # Use class variable
 
         # Set focus correctly
         if replace_mode and self.last_find_text:
@@ -1036,24 +1023,23 @@ class Notepad:
     def _find_dialog_closed(self, event=None):
         # Check if the event widget is the dialog we tracked
         if self.find_dialog is not None and event.widget == self.find_dialog:
-             # --- Remove search highlight when dialog closes ---
              try:
                  self.text_area.tag_remove("search_highlight", "1.0", tk.END)
              except tk.TclError:
-                 pass # Ignore error if text_area is already gone
-             # ---
+                 pass
 
              # Save last values before clearing the reference
              try:
                   self.last_find_text = self.find_dialog.find_what_var.get()
                   if hasattr(self.find_dialog, 'replace_with_var'):
                        self.last_replace_text = self.find_dialog.replace_with_var.get()
-                  self.last_match_case = self.find_dialog.match_case_var.get()
+                  # Save match case setting to class variable
+                  Notepad.last_match_case_setting = self.find_dialog.match_case_var.get()
              except tk.TclError:
                   pass
              finally:
-                  self.find_dialog = None # Clear the reference
-                  self._update_line_colors() # Update line colors after dialog is closed
+                  self.find_dialog = None
+                  self._update_line_colors()
 
     # --- End Find/Replace Dialog Methods ---
 
@@ -1402,6 +1388,19 @@ class Notepad:
         # Add F5 and F6 bindings
         self.text_area.bind("<F5>", lambda e: self.insert_sydney_time())
         self.text_area.bind("<F6>", lambda e: self.prompt_and_insert_date())
+        
+        # Suppress default text widget behaviors
+        self.text_area.bind("<Control-k>", lambda e: "break")  # Suppress delete to end of line
+        self.text_area.bind("<Control-d>", lambda e: "break")  # Suppress delete character
+        
+        # Change Ctrl+O to open file dialog
+        def handle_ctrl_o(event):
+            self.open_file()
+            return "break"  # Prevent default behavior
+        
+        # Bind to both root and text_area
+        self.root.bind("<Control-o>", handle_ctrl_o)
+        self.text_area.bind("<Control-o>", handle_ctrl_o)
 
     def _handle_ctrl_h(self, event):
         """Handle Ctrl+H key press."""
@@ -1467,6 +1466,7 @@ class Notepad:
             with open(settings_path, 'w', encoding='utf-8') as f:
                 # Save settings as key=value pairs
                 f.write(f"reopen_last_file={int(Notepad.reopen_last_file)}\n")
+                f.write(f"match_case={int(Notepad.last_match_case_setting)}\n")  # Add match case setting
                 
             # Also save recent files
             self._save_recent_files()
@@ -1486,6 +1486,8 @@ class Notepad:
                             key, value = line.strip().split('=', 1)
                             if key == "reopen_last_file":
                                 Notepad.reopen_last_file = bool(int(value))
+                            elif key == "match_case":  # Load match case setting
+                                Notepad.last_match_case_setting = bool(int(value))
             
             # Also load recent files
             self._load_recent_files()
