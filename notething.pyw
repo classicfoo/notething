@@ -191,7 +191,7 @@ class FindReplaceDialog(tk.Toplevel):
 
         # --- Initial Focus and Bindings ---
         self.find_entry.focus_set() # Start cursor in "Find what"
-        self.protocol("WM_DELETE_WINDOW", self._cleanup_tags_and_destroy) # Handle closing via 'X' button
+        self.protocol("WM_DELETE_WINDOW", self._cleanup_custom_tags_and_destroy) # Handle closing via 'X' button
 
         # Bind Enter key in find entry to Find Next
         self.find_entry.bind("<Return>", lambda event: self.find_next())
@@ -199,7 +199,7 @@ class FindReplaceDialog(tk.Toplevel):
              self.replace_entry.bind("<Return>", lambda event: self.replace())
 
         # --- Bind Escape key to close the dialog ---
-        self.bind("<Escape>", lambda event: self._cleanup_tags_and_destroy())
+        self.bind("<Escape>", lambda event: self._cleanup_custom_tags_and_destroy())
         # --- End Escape Binding ---
 
         # Store last search position
@@ -214,14 +214,14 @@ class FindReplaceDialog(tk.Toplevel):
         self.focus_set()
         
         # Bind dialog destruction to cleanup the preserved selection tag
-        self.bind("<Destroy>", self._cleanup_tags)
+        self.bind("<Destroy>", self._cleanup_custom_tags)
 
-    def _cleanup_tags_and_destroy(self, event=None):
+    def _cleanup_custom_tags_and_destroy(self, event=None):
         """Clean up tags and then destroy the dialog"""
-        self._cleanup_tags()
+        self._cleanup_custom_tags()
         self.destroy()
 
-    def _cleanup_tags(self, event=None):
+    def _cleanup_custom_tags(self, event=None):
         """Remove custom tags when the dialog is destroyed"""
         try:
             # Clear ALL selections and custom tags
