@@ -15,7 +15,7 @@ X Find and Replace in selction checkbox
 X Open Recent Files ... (Lists the last 5 files recently opened)
 X Open dialog to be for all files by default (not just .txt files)
 X Reopen last file on startup variable (for debugging purposes, bool value)
-T After pressing F6, press enter to accept selected date on calendar picker
+X After pressing F6, press enter to accept selected date on calendar picker
 
 ## Bugs
 X tkcalendar doesn't open in centre of the screen straight away
@@ -30,6 +30,11 @@ X Replace all doesn't work
 X When doing find and replace, it doesn't search from the beginning
 X After replacing, it should automatically find the next instance (ready for replacing)
 T Pressing enter a few time on line with heading doesn't work as expected
+T Arrow keys doesn't move dates on calendar
+
+T asdfasf 09:03 AM 17 May 2025 21 May 2025
+T asdfasf
+T asdfasf
 
 # Study
 

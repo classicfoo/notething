@@ -79,6 +79,10 @@ class CalendarDialog(tk.Toplevel):
         self.focus_set()
         self.cal.focus_set() # Set focus to the calendar
 
+        # Add Enter key binding to accept selected date
+        self.bind("<Return>", lambda e: self._on_ok())
+        self.cal.bind("<Return>", lambda e: self._on_ok())  # Also bind to calendar widget
+
     def _on_ok(self):
         self.result_date = self.cal.selection_get() # Returns a datetime.date object
         self.destroy()
@@ -1388,16 +1392,16 @@ class Notepad:
 
     def _setup_key_bindings(self):
         """Setup keyboard shortcuts/bindings."""
-        # Prevent default Ctrl+H backspace behavior in text widget
+        # Existing bindings
         self.text_area.bind("<Control-h>", self._handle_ctrl_h)
-        
-        # Add bindings for Ctrl+Home and Ctrl+End navigation
         self.text_area.bind("<Control-Home>", self._handle_ctrl_home)
         self.text_area.bind("<Control-End>", self._handle_ctrl_end)
-        
-        # Also handle the shift variants for selection
         self.text_area.bind("<Control-Shift-Home>", self._handle_ctrl_home)
         self.text_area.bind("<Control-Shift-End>", self._handle_ctrl_end)
+        
+        # Add F5 and F6 bindings
+        self.text_area.bind("<F5>", lambda e: self.insert_sydney_time())
+        self.text_area.bind("<F6>", lambda e: self.prompt_and_insert_date())
 
     def _handle_ctrl_h(self, event):
         """Handle Ctrl+H key press."""
