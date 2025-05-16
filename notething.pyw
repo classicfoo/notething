@@ -355,62 +355,86 @@ class FindReplaceDialog(tk.Toplevel):
         # --- End Refined Replace logic ---
 
     def replace_all(self):
-        # --- Replace All logic with single undo step ---
+        """Replace all occurrences of the find term with the replace term."""
         find_term = self.find_what_var.get()
         replace_term = self.replace_with_var.get()
-        nocase = not self.match_case_var.get()
-
+        
         if not find_term:
             messagebox.showwarning("Replace All", "Please enter text to find.", parent=self)
             return
-
-        # --- Remove any existing highlight before starting ---
+        
+        # Determine search boundaries
+        if self.find_in_selection_var.get():
+            if self.initial_sel_start and self.initial_sel_end:
+                start_pos = self.initial_sel_start
+                stop_pos = self.initial_sel_end
+            else:
+                messagebox.showwarning("Replace All", "No text selected.", parent=self)
+                return
+        else:
+            start_pos = "1.0"
+            stop_pos = tk.END
+        
+        # Remove any existing highlight
         self.text_widget.tag_remove("search_highlight", "1.0", tk.END)
-
+        
+        # Turn off auto separators to make it a single undo operation
+        original_autoseparators = self.text_widget.cget("autoseparators")
+        self.text_widget.config(autoseparators=False)
+        
         count = 0
-        start_pos = "1.0"
-
-        # --- Temporarily disable auto separators for single undo ---
+        current_pos = start_pos
+        nocase = not self.match_case_var.get()
+        
         try:
-            original_autoseparators = self.text_widget.cget("autoseparators")
-            self.text_widget.config(autoseparators=False)
-
+            # Loop through and replace all occurrences
             while True:
-                found_pos = self.text_widget.search(find_term, start_pos, stopindex=tk.END, nocase=nocase, count=tk.IntVar())
+                found_pos = self.text_widget.search(find_term, current_pos, stopindex=stop_pos, nocase=nocase)
                 if not found_pos:
-                    break # No more occurrences
-
-                # Check if found_pos is valid before proceeding
-                if not found_pos: continue
-
+                    break
+                
+                # Calculate the end position of the found text
                 end_pos = f"{found_pos}+{len(find_term)}c"
-                self.text_area.delete(found_pos, end_pos)
-                self.text_area.insert(found_pos, replace_term)
+                
+                # Replace this occurrence
+                self.text_widget.delete(found_pos, end_pos)
+                self.text_widget.insert(found_pos, replace_term)
+                
+                # Update current position for next search
+                # Important: account for the different lengths of find and replace terms
+                current_pos = f"{found_pos}+{len(replace_term)}c"
+                
+                # Update stop position if we're searching in selection
+                # This is needed because the replacement might change text positions
+                if self.find_in_selection_var.get():
+                    # Adjust the end boundary by the difference in length between find and replace terms
+                    length_diff = len(replace_term) - len(find_term)
+                    if length_diff != 0:
+                        # Get current line and char position of stop_pos
+                        line, char = map(int, self.text_widget.index(stop_pos).split('.'))
+                        # Adjust the character position
+                        char += length_diff
+                        # Update stop_pos
+                        stop_pos = f"{line}.{char}"
+                
                 count += 1
-                # Start next search *after* the inserted text
-                start_pos = f"{found_pos}+{len(replace_term)}c"
-
-            # --- Manually add undo separator *if* changes were made ---
+            
+            # Create a single undo entry for all replacements
             if count > 0:
                 self.text_widget.edit_separator()
-
+                
+            # Show result message
+            if count > 0:
+                messagebox.showinfo("Replace All", f"Replaced {count} occurrence(s).", parent=self)
+                # Update line colors if needed
+                if hasattr(self.master, '_update_line_colors'):
+                    self.master._update_line_colors()
+            else:
+                messagebox.showinfo("Replace All", f"Cannot find '{find_term}'", parent=self)
+                
         finally:
-            # --- Always restore original autoseparator setting ---
+            # Restore auto separators
             self.text_widget.config(autoseparators=original_autoseparators)
-        # --- End single undo step logic ---
-
-        if count > 0:
-             messagebox.showinfo("Replace All", f"Replaced {count} occurrence(s).", parent=self)
-             # Update line colors only if changes were made
-             self._update_line_colors() # Call helper method
-        else:
-             messagebox.showinfo("Replace All", f"Cannot find '{find_term}'", parent=self)
-        # --- End Replace All logic ---
-
-    # Need access to the main app's color update method
-    def _update_line_colors(self):
-         if hasattr(self.master, '_update_line_colors'):
-              self.master._update_line_colors()
 
 
 # --- End Find/Replace Dialog Class ---
@@ -994,7 +1018,6 @@ class Notepad:
         else:
              self.find_dialog.find_entry.focus_set()
 
-
         # Register callback for when dialog is closed
         self.find_dialog.bind("<Destroy>", self._find_dialog_closed)
 
@@ -1024,6 +1047,8 @@ class Notepad:
                   pass
              finally:
                   self.find_dialog = None # Clear the reference
+                  self._update_line_colors() # Update line colors after dialog is closed
+
     # --- End Find/Replace Dialog Methods ---
 
     # --- Add Tab/Shift-Tab Handlers ---
