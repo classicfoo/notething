@@ -657,6 +657,8 @@ class Notepad:
         # Add Undo/Redo if needed later using text_area.edit_undo(), text_area.edit_redo()
         edit_menu.add_command(label="Find...", command=self.open_find_dialog, accelerator="Ctrl+F")
         edit_menu.add_command(label="Replace...", command=self.open_replace_dialog, accelerator="Ctrl+H")
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Settings...", command=self.open_settings_dialog)
         menu_bar.add_cascade(label="Edit", menu=edit_menu)
         # --- End Edit Menu ---
 
@@ -1504,6 +1506,85 @@ class Notepad:
             self.options_menu.entryconfig("Reopen Last File on Startup", selectcolor="black")
         else:
             self.options_menu.entryconfig("Reopen Last File on Startup", selectcolor="white")
+
+    def open_settings_dialog(self):
+        """Opens the settings dialog."""
+        dialog = SettingsDialog(self.root, self)
+        self.root.wait_window(dialog)
+        
+        # Update any UI elements that depend on settings
+        if hasattr(self, 'options_menu'):
+            if Notepad.reopen_last_file:
+                self.options_menu.entryconfig("Reopen Last File on Startup", selectcolor="black")
+            else:
+                self.options_menu.entryconfig("Reopen Last File on Startup", selectcolor="white")
+
+# Add this after the other dialog classes
+class SettingsDialog(tk.Toplevel, CenterDialogMixin):
+    def __init__(self, master, notepad):
+        super().__init__(master)
+        self.notepad = notepad
+        
+        self.title("Settings")
+        self.transient(master)
+        self.resizable(False, False)
+        
+        main_frame = ttk.Frame(self, padding="10")
+        main_frame.pack(expand=True, fill=tk.BOTH)
+        
+        # Startup Settings
+        startup_frame = ttk.LabelFrame(main_frame, text="Startup", padding="5")
+        startup_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.reopen_last_var = tk.BooleanVar(value=Notepad.reopen_last_file)
+        reopen_check = ttk.Checkbutton(
+            startup_frame, 
+            text="Reopen last file on startup",
+            variable=self.reopen_last_var
+        )
+        reopen_check.pack(anchor='w')
+        
+        # Search Settings
+        search_frame = ttk.LabelFrame(main_frame, text="Search", padding="5")
+        search_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.match_case_var = tk.BooleanVar(value=Notepad.last_match_case_setting)
+        match_case_check = ttk.Checkbutton(
+            search_frame,
+            text="Match case by default",
+            variable=self.match_case_var
+        )
+        match_case_check.pack(anchor='w')
+        
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        ok_button = ttk.Button(button_frame, text="OK", command=self._on_ok, width=10)
+        ok_button.pack(side=tk.RIGHT, padx=(5, 0))
+        
+        cancel_button = ttk.Button(button_frame, text="Cancel", command=self._on_cancel, width=10)
+        cancel_button.pack(side=tk.RIGHT)
+        
+        # Bindings
+        self.bind("<Escape>", lambda e: self._on_cancel())
+        self.bind("<Return>", lambda e: self._on_ok())
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+        
+        # Center and make modal
+        self.center_dialog()
+        self.grab_set()
+        self.focus_set()
+
+    def _on_ok(self):
+        # Save settings
+        Notepad.reopen_last_file = self.reopen_last_var.get()
+        Notepad.last_match_case_setting = self.match_case_var.get()
+        self.notepad._save_settings()
+        self.destroy()
+
+    def _on_cancel(self):
+        self.destroy()
 
 if __name__ == "__main__":
     # --- Argument Parsing ---

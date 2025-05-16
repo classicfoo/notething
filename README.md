@@ -17,11 +17,11 @@ X Open dialog to be for all files by default (not just .txt files)
 X Reopen last file on startup variable (for debugging purposes, bool value)
 X After pressing F6, press enter to accept selected date on calendar picker
 T Create a settings dialog
-T Create a mixin that makes sure that all dialogs are opened in the centre of the screen
-T Suppress default text widget behaviours
-	T Ctrl + K  # Delete line from cursor to end
-	T Ctrl + D  # Delete character after cursor
-	T Ctrl + O  # Inserts newline
+X Create a mixin that makes sure that all dialogs are opened in the centre of the screen
+X Suppress default text widget behaviours
+	X Ctrl + K  # Delete line from cursor to end
+	X Ctrl + D  # Delete character after cursor
+	X Ctrl + O  # Inserts newline
 X Remember match case settings
 
 ## Bugs
