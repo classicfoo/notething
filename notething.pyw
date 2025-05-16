@@ -1392,6 +1392,9 @@ class Notepad:
         
         # Make sure the beginning is visible
         self.text_area.see("1.0")
+
+        # Remove any selection highlights when navigating
+        self.text_area.tag_remove(tk.SEL, "1.0", tk.END)
        
         return "break"  # Prevent default behavior
 
