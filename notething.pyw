@@ -124,7 +124,7 @@ class FindReplaceDialog(tk.Toplevel):
         self.title("Find" if not replace_mode else "Find and Replace")
         
         # Configure dialog
-        dialog_width = 350
+        dialog_width = 400
         dialog_height = 150
         self.resizable(False, False)
         self.transient(master)
@@ -593,6 +593,7 @@ class Notepad:
         # --- End Find/Replace State ---
 
         self.create_menu()
+        self._setup_key_bindings()
         self.bind_hotkeys()
 
         # Bind Ctrl + Backspace to delete the previous word
@@ -667,15 +668,15 @@ class Notepad:
         self.root.config(menu=menu_bar)
 
     def bind_hotkeys(self):
-        self.root.bind('<Control-n>', lambda event: self.new_file())
-        self.root.bind('<Control-o>', lambda event: self.open_file())
-        self.root.bind('<Control-s>', lambda event: self.save_file())
-        self.root.bind('<F5>', lambda event: self.insert_sydney_time())
-        self.root.bind('<F6>', lambda event: self.prompt_and_insert_date())
-        # --- Add Find/Replace Hotkeys ---
-        self.root.bind('<Control-f>', lambda event: self.open_find_dialog())
-        self.root.bind('<Control-h>', lambda event: self.open_replace_dialog())
-        # --- End Find/Replace Hotkeys ---
+        """Bind keyboard shortcuts."""
+        # File menu
+        self.root.bind("<Control-n>", lambda e: self.new_file())
+        self.root.bind("<Control-o>", lambda e: self.open_file())
+        self.root.bind("<Control-s>", lambda e: self.save_file())
+        
+        # Edit menu
+        self.root.bind("<Control-f>", lambda e: self.open_find_dialog())
+        # Remove the Ctrl+H binding from here since it's handled in _setup_key_bindings
 
     def delete_previous_word(self, event):
         # Get the current cursor position
@@ -1026,6 +1027,7 @@ class Notepad:
 
     def open_replace_dialog(self):
         self._launch_find_replace_dialog(replace_mode=True)
+
 
     def _find_dialog_closed(self, event=None):
         # Check if the event widget is the dialog we tracked
@@ -1386,7 +1388,8 @@ class Notepad:
 
     def _setup_key_bindings(self):
         """Setup keyboard shortcuts/bindings."""
-        # Existing key bindings...
+        # Prevent default Ctrl+H backspace behavior in text widget
+        self.text_area.bind("<Control-h>", self._handle_ctrl_h)
         
         # Add bindings for Ctrl+Home and Ctrl+End navigation
         self.text_area.bind("<Control-Home>", self._handle_ctrl_home)
@@ -1395,8 +1398,11 @@ class Notepad:
         # Also handle the shift variants for selection
         self.text_area.bind("<Control-Shift-Home>", self._handle_ctrl_home)
         self.text_area.bind("<Control-Shift-End>", self._handle_ctrl_end)
-        
-        # ...other bindings
+
+    def _handle_ctrl_h(self, event):
+        """Handle Ctrl+H key press."""
+        self.open_replace_dialog()
+        return "break"  # Prevent the default backspace behavior
 
     def _handle_ctrl_home(self, event=None):
         """Handle Ctrl+Home to move to the beginning of the document."""
