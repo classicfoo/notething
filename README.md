@@ -30,6 +30,7 @@ T Dynamic Line Formatting
 	X Add to settings
 	X Make sure that setting applies to entire document when dialog is closed i.e. formatign is stripped for entire document when DLF is unchecked
 	T Generalise the rules, so that the user can define them, put this in the settings dialog.
+X File > New works differently depending on whether the app is being launched for the first time (first window) or if it's another window being opened
 
 
 ## Bugs
@@ -48,7 +49,7 @@ X Find and replace not working on new window after going file > new
 T Pressing enter a few time on line with heading doesn't work as expected
 T Arrow keys doesn't move dates on calendar
 X Checkboxes not showing properly for settings. 
-T Open file dialog makes other window focused.
+X Open file dialog makes other window focused.
 
 # Test Area
 

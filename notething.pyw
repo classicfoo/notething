@@ -504,6 +504,9 @@ class Notepad:
     # Change the variable name to be more accurate
     line_formatting_enabled = True  # Default to enabled
 
+    # Add a class variable to track if first window has been initialized
+    first_window_initialized = False
+
     def __init__(self, root, initial_file=None):
         self.root = root
         self.root.title("Notething")
@@ -639,16 +642,23 @@ class Notepad:
         # Load settings and recent files
         self._load_settings()
 
-        # Load initial file if provided, or last file if setting enabled
-        if initial_file:
-            self._load_file(initial_file)
-        elif Notepad.reopen_last_file and Notepad.recent_files:
-            # Reopen the most recently used file
-            self._load_file(Notepad.recent_files[0])
+        # Handle initial file loading based on whether this is the first window
+        if not Notepad.first_window_initialized:
+            # This is the first window
+            Notepad.first_window_initialized = True
+            if initial_file:
+                self._load_file(initial_file)
+            elif Notepad.reopen_last_file and Notepad.recent_files:
+                # Reopen the most recently used file
+                self._load_file(Notepad.recent_files[0])
+            else:
+                # Ensure initial coloring is applied even for an empty new file
+                self._update_line_formatting()
+                self.root.title("Notething - Untitled")
         else:
-            # Ensure initial coloring is applied even for an empty new file
+            # This is a subsequent window - always start blank
             self._update_line_formatting()
-            self.root.title("Notething - Untitled") # Set title for new blank window
+            self.root.title("Notething - Untitled")
 
         # Bind the window close button (X)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close_window)
@@ -727,27 +737,22 @@ class Notepad:
 
     def new_file(self):
         """Opens a new, blank Notepad window."""
-        new_notepad_root = TkinterDnD.Tk() # Create a new Tk root
+        new_notepad_root = TkinterDnD.Tk()
 
         # Apply the same theme setup as the main window
-        # This ensures new windows also get the theme.
         style = ttk.Style(new_notepad_root)
         try:
-            # Try a theme that might look better on the specific OS
             if new_notepad_root.tk.call('tk', 'windowingsystem') == 'win32':
-                style.theme_use('vista') # Or 'xpnative'
+                style.theme_use('vista')
             elif new_notepad_root.tk.call('tk', 'windowingsystem') == 'aqua':
-                style.theme_use('aqua') # macOS
+                style.theme_use('aqua')
             else:
-                style.theme_use('clam') # A reasonable default for Linux/others
+                style.theme_use('clam')
         except tk.TclError:
-            style.theme_use("default") # Fallback
+            style.theme_use("default")
 
-        # Create a new Notepad instance associated with the new root.
-        # No initial_file is passed, so it will be a blank editor.
+        # Create a new blank Notepad instance
         Notepad(new_notepad_root)
-        # The main application's root.mainloop() will handle this new window's events.
-        # Do not call new_notepad_root.mainloop() here.
 
     def _load_file(self, file_path):
         """Loads the content of the specified file into the text area."""
@@ -1334,14 +1339,9 @@ class Notepad:
 
     def _on_close_window(self):
         """Handles window close event."""
-        # Here you could add logic to check for unsaved changes before closing.
-        # For now, just destroy the window.
-        # Notepad.open_window_count -= 1 # Decrementing can be complex if windows close out of order
-                                        # and we want to reuse cascade slots.
-                                        # If open_window_count reaches 0, reset first_window_x/y
-                                        # so the next new window (if app is kept running) re-centers.
-        # A simpler approach for now: The mainloop exits when the last Tk root is destroyed.
-        # The cascading will just continue from the initial point.
+        if Notepad.open_window_count == 1:
+            # This is the last window being closed
+            Notepad.first_window_initialized = False
         self.root.destroy()
 
     def _add_to_recent_files(self, filepath):
