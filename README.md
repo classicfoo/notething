@@ -44,6 +44,7 @@ X Replace dialog looks broken: Increased dialog width to 400
 X Replace all doesn't work
 X When doing find and replace, it doesn't search from the beginning
 X After replacing, it should automatically find the next instance (ready for replacing)
+X Find and replace not working on new window after going file > new
 T Pressing enter a few time on line with heading doesn't work as expected
 T Arrow keys doesn't move dates on calendar
 
@@ -81,3 +82,7 @@ While "TNX Bullets" has the potential to be a catchy and memorable name, it may 
 # Embracing YAGNI: Designing Flexible and Future-Proof Software Solutions
 
 The concept of designing software with flexibility and generalization in mind is closely aligned with the principle of **YAGNI (You Aren't Gonna Need It)**, which emphasizes avoiding the implementation of unnecessary features until they are truly required. By adhering to YAGNI, developers can focus on delivering core functionalities that meet current user needs while leaving room for future enhancements. This approach not only simplifies the codebase, making it easier to maintain and understand, but also future-proofs the software by allowing it to adapt to changing requirements and unforeseen use cases without significant rework. Ultimately, prioritizing flexibility and generalization helps ensure that the application remains relevant and responsive to evolving user demands.
+
+# Resolving Checkbox Display Issues in the Find/Replace Dialog through Proper Variable Initialization
+
+The issue with dashes appearing in the checkboxes of the Find/Replace dialog is likely due to improperly initialized variables or mismatched variable types. To resolve this, the variable initialization should be moved before the UI creation, ensuring that the BooleanVar variables have explicit parent references (self) and initial values. By reordering the initialization process to guarantee that all variables exist before being used in the UI elements, this will eliminate the dashes, which typically indicate that the checkbutton's variable is in an undefined state. After implementing these changes, any related errors should be resolved.

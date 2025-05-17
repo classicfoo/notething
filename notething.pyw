@@ -102,6 +102,20 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         self.text_widget = text_widget
         self.master = master
         
+        # Create the dialog
+        super().__init__(master)
+        
+        # Configure dialog
+        self.title("Find" if not replace_mode else "Find and Replace")
+        self.transient(master)
+        self.resizable(False, False)
+
+        # Initialize variables with explicit parent
+        self.find_what_var = tk.StringVar(self)
+        self.replace_with_var = tk.StringVar(self)
+        self.match_case_var = tk.BooleanVar(self, value=False)  # Initialize with False
+        self.find_in_selection_var = tk.BooleanVar(self, value=False)  # Initialize with False
+
         # Store the current selection before creating the Toplevel
         try:
             self.initial_sel_start = self.text_widget.index(tk.SEL_FIRST)
@@ -111,7 +125,7 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
             self.initial_sel_start = None
             self.initial_sel_end = None
             has_selection = False
-        
+
         # Create a super unique tag name for preserving selection
         self.preserved_sel_tag = f"preserved_selection_{id(self)}_{time.time()}"
         
@@ -123,20 +137,6 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
             self.text_widget.tag_add(self.preserved_sel_tag, 
                                     self.initial_sel_start, 
                                     self.initial_sel_end)
-            
-        # Create the dialog
-        super().__init__(master)
-        
-        # Configure dialog
-        self.title("Find" if not replace_mode else "Find and Replace")
-        self.transient(master)
-        self.resizable(False, False)
-
-        # Variables for entries and checkbox
-        self.find_what_var = tk.StringVar()
-        self.replace_with_var = tk.StringVar()
-        self.match_case_var = tk.BooleanVar()
-        self.find_in_selection_var = tk.BooleanVar()
 
         # --- UI Elements ---
         # Frame for entries
@@ -151,6 +151,14 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
             ttk.Label(entry_frame, text="Replace with:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
             self.replace_entry = ttk.Entry(entry_frame, textvariable=self.replace_with_var, width=30)
             self.replace_entry.grid(row=1, column=1, sticky='ew', padx=5, pady=2)
+            
+            # Add Swap button
+            self.swap_btn = ttk.Button(entry_frame, text="⇅", width=3, command=self._swap_fields)
+            self.swap_btn.grid(row=0, column=2, rowspan=2, padx=(5,0), pady=2, sticky='ns')
+            
+            # Configure tooltip for swap button
+            self.swap_tooltip = Tooltip(self.swap_btn)
+            self.swap_tooltip.set_text("Swap Find/Replace text")
 
         entry_frame.columnconfigure(1, weight=1) # Make entry expand
 
@@ -428,6 +436,16 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
             # Restore auto separators
             self.text_widget.config(autoseparators=original_autoseparators)
 
+    def _swap_fields(self):
+        """Swap the contents of find and replace fields."""
+        find_text = self.find_what_var.get()
+        replace_text = self.replace_with_var.get()
+        
+        self.find_what_var.set(replace_text)
+        self.replace_with_var.set(find_text)
+        
+        # Set focus to find field after swap
+        self.find_entry.focus_set()
 
 # --- End Find/Replace Dialog Class ---
 
