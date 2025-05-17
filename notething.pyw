@@ -508,6 +508,9 @@ class Notepad:
     # Add a class variable to track if first window has been initialized
     first_window_initialized = False
 
+    # Add this with other class variables at the start of Notepad class
+    auto_capitalize_headings = True  # Default to enabled
+
     def __init__(self, root, initial_file=None):
         self.root = root
         self.root.title("Notething")
@@ -1014,16 +1017,17 @@ class Notepad:
             # Strip whitespace for prefix checking but keep original line for display
             stripped_line = line.lstrip()
             
-            # Format headings (H1-H3) if line starts with #
+            # Format headings (H1-H3) if line starts with # and auto-capitalize is enabled
             if stripped_line.startswith('#'):
-                formatted_line = self._format_heading_line(line)
-                if formatted_line != line:
-                    modified = True
-                    self.text_area.delete(line_start, line_end)
-                    self.text_area.insert(line_start, formatted_line)
-                # Apply bold tag for headings
+                if Notepad.auto_capitalize_headings:
+                    formatted_line = self._format_heading_line(line)
+                    if formatted_line != line:
+                        modified = True
+                        self.text_area.delete(line_start, line_end)
+                        self.text_area.insert(line_start, formatted_line)
+                # Apply bold tag for headings regardless of capitalization
                 self.text_area.tag_add("bold_line", line_start, line_end)
-                continue  # Skip other formatting for heading lines
+                continue
             
             # Apply color formatting based on line prefix
             if stripped_line.startswith('T '):
@@ -1048,8 +1052,8 @@ class Notepad:
         # Get the current line
         current_line = self.text_area.get("insert linestart", "insert lineend")
         
-        # Only process if the line starts with a heading marker
-        if current_line.startswith('#'):
+        # Only process if the line starts with a heading marker AND auto-capitalize is enabled
+        if current_line.startswith('#') and Notepad.auto_capitalize_headings:
             # Store cursor position
             cursor_pos = self.text_area.index(tk.INSERT)
             
@@ -1650,6 +1654,7 @@ class Notepad:
                 f.write(f"reopen_last_file={int(Notepad.reopen_last_file)}\n")
                 f.write(f"match_case={int(Notepad.last_match_case_setting)}\n")
                 f.write(f"line_formatting={int(Notepad.line_formatting_enabled)}\n")
+                f.write(f"auto_capitalize_headings={int(Notepad.auto_capitalize_headings)}\n")
                 
             # Also save recent files
             self._save_recent_files()
@@ -1673,6 +1678,8 @@ class Notepad:
                                 Notepad.last_match_case_setting = bool(int(value))
                             elif key == "line_formatting":
                                 Notepad.line_formatting_enabled = bool(int(value))
+                            elif key == "auto_capitalize_headings":
+                                Notepad.auto_capitalize_headings = bool(int(value))
             
             # Also load recent files
             self._load_recent_files()
@@ -1759,6 +1766,21 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         )
         format_check.pack(anchor='w')
         
+        # Add new variable for auto-capitalize setting
+        self.auto_capitalize_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_headings))
+        
+        # Add new section for Heading Settings after Line Formatting Settings
+        heading_frame = ttk.LabelFrame(main_frame, text="Heading Settings", padding="5")
+        heading_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        capitalize_check = ttk.Checkbutton(
+            heading_frame,
+            text="Auto-capitalize heading words",
+            variable=self.auto_capitalize_var,
+            command=lambda: self._update_checkbox_state(self.auto_capitalize_var)
+        )
+        capitalize_check.pack(anchor='w')
+        
         # Buttons
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=(5, 0))
@@ -1789,6 +1811,7 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         Notepad.reopen_last_file = bool(self.reopen_last_var.get())
         Notepad.last_match_case_setting = bool(self.match_case_var.get())
         Notepad.line_formatting_enabled = bool(self.line_format_var.get())
+        Notepad.auto_capitalize_headings = bool(self.auto_capitalize_var.get())
         self.notepad._save_settings()
         # Apply formatting changes immediately
         self.notepad._update_line_formatting()
