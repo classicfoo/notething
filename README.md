@@ -47,6 +47,8 @@ X After replacing, it should automatically find the next instance (ready for rep
 X Find and replace not working on new window after going file > new
 T Pressing enter a few time on line with heading doesn't work as expected
 T Arrow keys doesn't move dates on calendar
+X Checkboxes not showing properly for settings. 
+T Open file dialog makes other window focused.
 
 # Test Area
 

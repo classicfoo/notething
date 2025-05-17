@@ -1570,13 +1570,21 @@ class Notepad:
 # Add this after the other dialog classes
 class SettingsDialog(tk.Toplevel, CenterDialogMixin):
     def __init__(self, master, notepad):
+        # Initialize the Toplevel window first
         super().__init__(master)
         self.notepad = notepad
         
+        # Set window properties
         self.title("Settings")
         self.transient(master)
         self.resizable(False, False)
         
+        # Initialize all BooleanVar variables with explicit parent (self) and initial values
+        self.reopen_last_var = tk.BooleanVar(self, value=bool(Notepad.reopen_last_file))
+        self.match_case_var = tk.BooleanVar(self, value=bool(Notepad.last_match_case_setting))
+        self.line_format_var = tk.BooleanVar(self, value=bool(Notepad.line_formatting_enabled))
+        
+        # Create main frame
         main_frame = ttk.Frame(self, padding="10")
         main_frame.pack(expand=True, fill=tk.BOTH)
         
@@ -1584,11 +1592,11 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         startup_frame = ttk.LabelFrame(main_frame, text="Startup", padding="5")
         startup_frame.pack(fill=tk.X, pady=(0, 10))
         
-        self.reopen_last_var = tk.BooleanVar(value=Notepad.reopen_last_file)
         reopen_check = ttk.Checkbutton(
             startup_frame, 
             text="Reopen last file on startup",
-            variable=self.reopen_last_var
+            variable=self.reopen_last_var,
+            command=lambda: self._update_checkbox_state(self.reopen_last_var)
         )
         reopen_check.pack(anchor='w')
         
@@ -1596,23 +1604,23 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         search_frame = ttk.LabelFrame(main_frame, text="Search", padding="5")
         search_frame.pack(fill=tk.X, pady=(0, 10))
         
-        self.match_case_var = tk.BooleanVar(value=Notepad.last_match_case_setting)
         match_case_check = ttk.Checkbutton(
             search_frame,
             text="Match case by default",
-            variable=self.match_case_var
+            variable=self.match_case_var,
+            command=lambda: self._update_checkbox_state(self.match_case_var)
         )
         match_case_check.pack(anchor='w')
         
-        # Rename the frame and checkbox to be more accurate
+        # Line Formatting Settings
         format_frame = ttk.LabelFrame(main_frame, text="Dynamic Line Formatting", padding="5")
         format_frame.pack(fill=tk.X, pady=(0, 10))
         
-        self.line_format_var = tk.BooleanVar(value=Notepad.line_formatting_enabled)
         format_check = ttk.Checkbutton(
             format_frame,
             text="Enable dynamic line formatting",
-            variable=self.line_format_var
+            variable=self.line_format_var,
+            command=lambda: self._update_checkbox_state(self.line_format_var)
         )
         format_check.pack(anchor='w')
         
@@ -1636,11 +1644,16 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         self.grab_set()
         self.focus_set()
 
+    def _update_checkbox_state(self, var):
+        """Ensure checkbox state is properly updated"""
+        # Force the variable to be a proper boolean
+        var.set(bool(var.get()))
+
     def _on_ok(self):
-        # Save settings
-        Notepad.reopen_last_file = self.reopen_last_var.get()
-        Notepad.last_match_case_setting = self.match_case_var.get()
-        Notepad.line_formatting_enabled = self.line_format_var.get()
+        # Save settings using boolean values
+        Notepad.reopen_last_file = bool(self.reopen_last_var.get())
+        Notepad.last_match_case_setting = bool(self.match_case_var.get())
+        Notepad.line_formatting_enabled = bool(self.line_format_var.get())
         self.notepad._save_settings()
         # Apply formatting changes immediately
         self.notepad._update_line_formatting()
