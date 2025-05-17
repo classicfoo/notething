@@ -1200,46 +1200,60 @@ class Notepad:
     # --- Add Enter Key Handler for Auto-Indentation ---
     def _handle_enter_key(self, event=None):
         """Handles Enter key press for auto-indentation."""
-        current_cursor_pos = self.text_area.index(tk.INSERT)
+        # First handle any existing selection
+        try:
+            sel_start = self.text_area.index(tk.SEL_FIRST)
+            sel_end = self.text_area.index(tk.SEL_LAST)
+            # Get the line info for the selection start
+            current_cursor_pos = sel_start
+            # Delete the selected text
+            self.text_area.delete(sel_start, sel_end)
+        except tk.TclError:
+            # No selection exists
+            current_cursor_pos = self.text_area.index(tk.INSERT)
+
         current_line_start_idx = self.text_area.index(f"{current_cursor_pos} linestart")
         current_line_end_idx = self.text_area.index(f"{current_cursor_pos} lineend")
         current_line_content = self.text_area.get(current_line_start_idx, current_line_end_idx)
 
+        # Get the text before and after cursor on the current line
+        text_before_cursor = self.text_area.get(current_line_start_idx, current_cursor_pos)
+        text_after_cursor = self.text_area.get(current_cursor_pos, current_line_end_idx)
+
+        # Extract leading whitespace
         leading_whitespace = ""
         for char in current_line_content:
-            if char.isspace(): # Catches spaces, tabs, etc.
+            if char.isspace():  # Catches spaces, tabs, etc.
                 leading_whitespace += char
             else:
                 break
-
-        text_before_cursor_on_line = self.text_area.get(current_line_start_idx, current_cursor_pos)
 
         original_autoseparators = self.text_area.cget("autoseparators")
         self.text_area.config(autoseparators=False)
         
         try:
-            # Scenario 1: Pressing Enter on a line that *only* contains whitespace,
-            # and the cursor is at the end of this whitespace.
-            if current_line_content.strip() == "" and text_before_cursor_on_line == current_line_content:
+            # Scenario 1: Pressing Enter on a line that *only* contains whitespace
+            if current_line_content.strip() == "":
                 self.text_area.delete(current_line_start_idx, current_line_end_idx)
-                self.text_area.insert(current_line_start_idx, "\n") # Cursor moves to next line, col 0
+                self.text_area.insert(current_line_start_idx, "\n")
                 self.text_area.edit_separator()
             else:
-                # Scenario 2: Auto-indent new line, potentially splitting the current line.
-                # Text after the cursor on the current line.
-                suffix = self.text_area.get(current_cursor_pos, current_line_end_idx)
-                
-                # Delete the suffix from the current line.
-                self.text_area.delete(current_cursor_pos, current_line_end_idx)
-                
-                # Insert newline, the indent, and then the suffix.
-                self.text_area.insert(current_cursor_pos, "\n" + leading_whitespace + suffix)
+                # Scenario 2: Split the line at cursor position and maintain indentation
+                # Delete the current line
+                self.text_area.delete(current_line_start_idx, current_line_end_idx)
+                # Insert the text before cursor
+                self.text_area.insert(current_line_start_idx, text_before_cursor)
+                # Insert newline and indented text after cursor
+                self.text_area.insert(current_cursor_pos, "\n" + leading_whitespace + text_after_cursor)
+                # Move cursor to the start of the indented text
+                new_cursor_pos = f"{int(current_cursor_pos.split('.')[0]) + 1}.{len(leading_whitespace)}"
+                self.text_area.mark_set(tk.INSERT, new_cursor_pos)
                 self.text_area.edit_separator()
         finally:
             self.text_area.config(autoseparators=original_autoseparators)
 
         self._update_line_formatting()
-        return "break" # Prevent default Tkinter Enter behavior
+        return "break"  # Prevent default Tkinter Enter behavior
     # --- End Enter Key Handler ---
 
     # --- Add Smart Home Key Handler ---
