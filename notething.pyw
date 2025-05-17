@@ -778,6 +778,7 @@ class Notepad:
     def open_file(self):
         """Open a file for editing"""
         # Show the file dialog with "All Files" as the default option
+        # Make dialog modal to the main window and ensure it stays on top
         filepath = filedialog.askopenfilename(
             title="Open File",
             filetypes=[
@@ -786,11 +787,15 @@ class Notepad:
                 ("Python Files", "*.py;*.pyw"),
                 ("Markdown Files", "*.md"),
                 ("HTML Files", "*.html;*.htm")
-            ]
+            ],
+            parent=self.root  # Make dialog modal to main window
         )
         
         if filepath:  # If a file was selected (not canceled)
             self._load_file(filepath)
+            # Ensure main window gets focus back
+            self.root.focus_force()
+            self.text_area.focus_set()
 
     def save_file(self):
         if self.current_file:  # If a file is already opened
