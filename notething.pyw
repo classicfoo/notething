@@ -483,6 +483,9 @@ class Notepad:
     # Add this with other class variables at the start of Notepad class
     last_match_case_setting = False  # Default to case-insensitive search
 
+    # Change the variable name to be more accurate
+    line_formatting_enabled = True  # Default to enabled
+
     def __init__(self, root, initial_file=None):
         self.root = root
         self.root.title("Notething")
@@ -595,7 +598,7 @@ class Notepad:
         self.text_area.bind("<Control-BackSpace>", self.delete_previous_word)
 
         # --- Bind KeyRelease for Line Coloring ---
-        self.text_area.bind("<KeyRelease>", self._update_line_colors_event) # Use _event suffix for direct bindings
+        self.text_area.bind("<KeyRelease>", self._update_line_formatting_event) # Use _event suffix for direct bindings
         # --- End KeyRelease Binding ---
 
         # --- Bind Tab and Shift-Tab for Indentation ---
@@ -626,7 +629,7 @@ class Notepad:
             self._load_file(Notepad.recent_files[0])
         else:
             # Ensure initial coloring is applied even for an empty new file
-            self._update_line_colors()
+            self._update_line_formatting()
             self.root.title("Notething - Untitled") # Set title for new blank window
 
         # Bind the window close button (X)
@@ -741,7 +744,7 @@ class Notepad:
                 status_text = f"Status: Opened {file_path}"
                 self.status_bar.config(text=status_text)
                 self.tooltip.set_text(status_text)
-                self._update_line_colors()
+                self._update_line_formatting()
                 
                 # Add to recent files list
                 self._add_to_recent_files(file_path)
@@ -849,8 +852,18 @@ class Notepad:
             print(f"Could not parse dropped data: {event.data}")
 
     # --- Add the new method to update line colors ---
-    def _update_line_colors(self):
-        """Applies color tags based on line content."""
+    def _update_line_formatting(self):
+        """Update dynamic line formatting"""
+        if not Notepad.line_formatting_enabled:
+            # Remove all formatting when disabled
+            self.text_area.tag_remove("green_line", "1.0", tk.END)
+            self.text_area.tag_remove("blue_line", "1.0", tk.END)
+            self.text_area.tag_remove("grey_line", "1.0", tk.END)
+            self.text_area.tag_remove("maroon_line", "1.0", tk.END)
+            self.text_area.tag_remove("bold_line", "1.0", tk.END)
+            self.text_area.tag_remove("normal_line", "1.0", tk.END)
+            return
+
         # Remove existing tags first to reset colors
         self.text_area.tag_remove("green_line", "1.0", tk.END)
         self.text_area.tag_remove("blue_line", "1.0", tk.END)
@@ -890,10 +903,10 @@ class Notepad:
                 # Apply normal color tag if none of the conditions are met
                 self.text_area.tag_add("normal_line", line_start, line_end)
 
-    def _update_line_colors_event(self, event=None):
-        """Callback for KeyRelease event to update line colors."""
+    def _update_line_formatting_event(self, event=None):
+        """Callback for KeyRelease event to update line formatting."""
         # Optional: Add checks here if needed (e.g., ignore certain keys)
-        self._update_line_colors()
+        self._update_line_formatting()
     # --- End new method ---
 
     def rename_file(self):
@@ -986,7 +999,7 @@ class Notepad:
             finally:
                 self.text_area.config(autoseparators=original_autoseparators)
             
-            self._update_line_colors()
+            self._update_line_formatting()
     # --- End method to prompt for date ---
 
     # --- Methods to Open Find/Replace Dialog ---
@@ -1041,7 +1054,7 @@ class Notepad:
                   pass
              finally:
                   self.find_dialog = None
-                  self._update_line_colors()
+                  self._update_line_formatting()
 
     # --- End Find/Replace Dialog Methods ---
 
@@ -1054,7 +1067,7 @@ class Notepad:
         except tk.TclError: # No selection
             # Default behavior: insert a tab at cursor
             self.text_area.insert(tk.INSERT, "\t")
-            self._update_line_colors() # Update colors if a line prefix changes
+            self._update_line_formatting() # Update colors if a line prefix changes
             return "break" # Prevent focus change
 
         first_line_num = int(sel_first_idx.split('.')[0])
@@ -1080,7 +1093,7 @@ class Notepad:
             # self.text_area.insert(current_cursor_pos, "\t")
             # self.text_area.tag_remove(tk.SEL, "1.0", tk.END) # Clear selection
             # self.text_area.mark_set(tk.INSERT, f"{current_cursor_pos}+{len('\t')}c")
-            # self._update_line_colors()
+            # self._update_line_formatting()
             # return "break"
             #
             # For indenting the single selected line:
@@ -1111,7 +1124,7 @@ class Notepad:
 
                 self.text_area.tag_add(tk.SEL, adj_sel_first, adj_sel_last)
                 self.text_area.mark_set(tk.INSERT, adj_sel_last) # Move cursor to end of new selection
-                self._update_line_colors()
+                self._update_line_formatting()
         finally:
             self.text_area.config(autoseparators=original_autoseparators)
 
@@ -1177,7 +1190,7 @@ class Notepad:
 
                 self.text_area.tag_add(tk.SEL, adj_sel_first, adj_sel_last)
                 self.text_area.mark_set(tk.INSERT, adj_sel_last)
-                self._update_line_colors()
+                self._update_line_formatting()
         finally:
             self.text_area.config(autoseparators=original_autoseparators)
         
@@ -1225,7 +1238,7 @@ class Notepad:
         finally:
             self.text_area.config(autoseparators=original_autoseparators)
 
-        self._update_line_colors()
+        self._update_line_formatting()
         return "break" # Prevent default Tkinter Enter behavior
     # --- End Enter Key Handler ---
 
@@ -1468,7 +1481,8 @@ class Notepad:
             with open(settings_path, 'w', encoding='utf-8') as f:
                 # Save settings as key=value pairs
                 f.write(f"reopen_last_file={int(Notepad.reopen_last_file)}\n")
-                f.write(f"match_case={int(Notepad.last_match_case_setting)}\n")  # Add match case setting
+                f.write(f"match_case={int(Notepad.last_match_case_setting)}\n")
+                f.write(f"line_formatting={int(Notepad.line_formatting_enabled)}\n")
                 
             # Also save recent files
             self._save_recent_files()
@@ -1488,8 +1502,10 @@ class Notepad:
                             key, value = line.strip().split('=', 1)
                             if key == "reopen_last_file":
                                 Notepad.reopen_last_file = bool(int(value))
-                            elif key == "match_case":  # Load match case setting
+                            elif key == "match_case":
                                 Notepad.last_match_case_setting = bool(int(value))
+                            elif key == "line_formatting":
+                                Notepad.line_formatting_enabled = bool(int(value))
             
             # Also load recent files
             self._load_recent_files()
@@ -1556,6 +1572,18 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         )
         match_case_check.pack(anchor='w')
         
+        # Rename the frame and checkbox to be more accurate
+        format_frame = ttk.LabelFrame(main_frame, text="Dynamic Line Formatting", padding="5")
+        format_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self.line_format_var = tk.BooleanVar(value=Notepad.line_formatting_enabled)
+        format_check = ttk.Checkbutton(
+            format_frame,
+            text="Enable dynamic line formatting",
+            variable=self.line_format_var
+        )
+        format_check.pack(anchor='w')
+        
         # Buttons
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=(5, 0))
@@ -1580,7 +1608,10 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         # Save settings
         Notepad.reopen_last_file = self.reopen_last_var.get()
         Notepad.last_match_case_setting = self.match_case_var.get()
+        Notepad.line_formatting_enabled = self.line_format_var.get()
         self.notepad._save_settings()
+        # Apply formatting changes immediately
+        self.notepad._update_line_formatting()
         self.destroy()
 
     def _on_cancel(self):

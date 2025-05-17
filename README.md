@@ -6,23 +6,31 @@
 - Find Dialog (Ctrl + F)
 - Find and Replace Dialog (Ctrl + H)
 - Smart Home Key and Selection
-N Pressing Shift + Home
-	N First time - Selects until the end of first whitepsace characters
-	N Second time - Selects until the beginning of the line
 
 ## Todo
+X Pressing Shift + Home
+	X First time - Selects until the end of first whitepsace characters
+	X Second time - Selects until the beginning of the line
 X Find and Replace in selction checkbox
 X Open Recent Files ... (Lists the last 5 files recently opened)
 X Open dialog to be for all files by default (not just .txt files)
 X Reopen last file on startup variable (for debugging purposes, bool value)
 X After pressing F6, press enter to accept selected date on calendar picker
-T Create a settings dialog
+X Create a settings dialog
 X Create a mixin that makes sure that all dialogs are opened in the centre of the screen
 X Suppress default text widget behaviours
 	X Ctrl + K  # Delete line from cursor to end
 	X Ctrl + D  # Delete character after cursor
 	X Ctrl + O  # Inserts newline
 X Remember match case settings
+T Auto suggest filenames by looking at the first markdown H1 in file and then using that ensuring that the filename is prepped so that it's valid. the end result should have a filename in lowercase and each word is separated by underscores. 
+T Make markdown H1, H2 and H3 headings always be capitalised for each word on that line
+T Dynamic Line Formatting
+	X Rename TNX to Dynamic line formatting (DLF)
+	X Add to settings
+	X Make sure that setting applies to entire document when dialog is closed i.e. formatign is stripped for entire document when DLF is unchecked
+	T Generalise the rules, so that the user can define them, put this in the settings dialog.
+
 
 ## Bugs
 X tkcalendar doesn't open in centre of the screen straight away
@@ -63,3 +71,11 @@ The fix involved binding Ctrl+H directly to the Text widget and returning "break
 # Taming Tkinter's Text Widget: Understanding and Overriding Emacs-Style Default Keybindings
 
 Tkinter's Text widget comes with numerous default keybindings inherited from Emacs, which can surprise developers expecting Windows-style behavior. These include unexpected actions like Ctrl+O inserting a newline, Ctrl+H acting as backspace, Ctrl+D deleting characters, and various Alt/Meta key combinations for word navigation and deletion. To create a modern text editor experience, it's important to explicitly override these default bindings using bind() with return "break" to prevent the default behavior, and then implement the expected Windows-style shortcuts that users are familiar with, such as Ctrl+O for file operations and Ctrl+H for find/replace functionality.
+
+# Argument For the Name "TNX Bullets"
+
+While "TNX Bullets" has the potential to be a catchy and memorable name, it may also lead to confusion due to its ambiguity and lack of clarity regarding the feature's functionality. A more descriptive name that directly conveys the purpose of the feature, such as "Dynamic Line Highlighting," might be more effective in ensuring users understand its value and functionality.
+
+# Embracing YAGNI: Designing Flexible and Future-Proof Software Solutions
+
+The concept of designing software with flexibility and generalization in mind is closely aligned with the principle of **YAGNI (You Aren't Gonna Need It)**, which emphasizes avoiding the implementation of unnecessary features until they are truly required. By adhering to YAGNI, developers can focus on delivering core functionalities that meet current user needs while leaving room for future enhancements. This approach not only simplifies the codebase, making it easier to maintain and understand, but also future-proofs the software by allowing it to adapt to changing requirements and unforeseen use cases without significant rework. Ultimately, prioritizing flexibility and generalization helps ensure that the application remains relevant and responsive to evolving user demands.
