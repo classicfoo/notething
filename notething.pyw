@@ -11,6 +11,7 @@ import tkinter.simpledialog # Already imported, but ensure it's there
 import calendar # <-- Import calendar for month names
 from tkcalendar import Calendar # <-- Import the Calendar widget
 import time # <-- Import time module
+import re
 
 # Add this class before the other dialog classes
 class CenterDialogMixin:
@@ -802,39 +803,88 @@ class Notepad:
             self.root.focus_force()
             self.text_area.focus_set()
 
+    def _get_suggested_filename(self):
+        """Get a suggested filename based on the first H1 markdown heading."""
+        try:
+            # Get all text content
+            content = self.text_area.get("1.0", tk.END)
+            
+            # Look for # heading pattern at the start of any line
+            import re
+            h1_pattern = r'(?m)^#\s+(.+)$'  # Matches '# Heading' at start of any line
+            match = re.search(h1_pattern, content)
+            
+            if match:
+                # Get the heading text
+                heading = match.group(1).strip()
+                
+                # Convert to lowercase
+                heading = heading.lower()
+                
+                # Replace invalid filename characters and spaces with underscores
+                # First replace spaces with underscores
+                heading = heading.replace(' ', '_')
+                
+                # Replace other invalid characters
+                invalid_chars = r'[<>:"/\\|?*]'
+                heading = re.sub(invalid_chars, '_', heading)
+                
+                # Replace multiple underscores with single underscore
+                heading = re.sub(r'_+', '_', heading)
+                
+                # Remove leading/trailing underscores
+                heading = heading.strip('_')
+                
+                # If empty after cleaning, return None
+                if not heading:
+                    return None
+                    
+                return heading
+        except Exception:
+            return None
+        
+        return None
+
     def save_file(self):
         if self.current_file:  # If a file is already opened
             try:
-                with open(self.current_file, 'w', encoding='utf-8') as file: # Added encoding
-                    file.write(self.text_area.get(1.0, tk.END).rstrip('\n') + '\n') # Ensure single newline at end
-                    # Get the current date and time in 12-hour format with seconds
-                    timestamp = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p") # <-- Added :%S
+                with open(self.current_file, 'w', encoding='utf-8') as file:
+                    file.write(self.text_area.get(1.0, tk.END).rstrip('\n') + '\n')
+                    timestamp = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
                     status_text = f"Status: Saved to {self.current_file} at {timestamp}"
                     self.status_bar.config(text=status_text)
                     self.tooltip.set_text(status_text)
-                    # Update title after saving with filename only
-                    filename = os.path.basename(self.current_file) # <-- Get filename
-                    self.root.title(f"Notething - {filename}") # <-- Use filename in title
+                    filename = os.path.basename(self.current_file)
+                    self.root.title(f"Notething - {filename}")
             except Exception as e:
-                 messagebox.showerror("Error Saving File", f"Could not save file:\n{e}")
-
+                messagebox.showerror("Error Saving File", f"Could not save file:\n{e}")
         else:  # If no file is opened, prompt to save as
-            file_path = filedialog.asksaveasfilename(defaultextension=".txt",
-                                                       filetypes=[("Text files", "*.txt"),
-                                                                  ("All files", "*.*")])
+            # Get suggested filename
+            suggested_name = self._get_suggested_filename()
+            initial_file = f"{suggested_name}.txt" if suggested_name else None
+            
+            file_path = filedialog.asksaveasfilename(
+                defaultextension=".txt",
+                filetypes=[
+                    ("Text files", "*.txt"),
+                    ("Markdown files", "*.md"),
+                    ("All files", "*.*")
+                ],
+                initialfile=initial_file,
+                parent=self.root
+            )
+            
             if file_path:  # Check if the user didn't cancel
                 try:
-                    with open(file_path, 'w', encoding='utf-8') as file: # Added encoding
-                        file.write(self.text_area.get(1.0, tk.END).rstrip('\n') + '\n') # Ensure single newline at end
-                        self.current_file = file_path # Update current file path
-                        # Get the current date and time in 12-hour format with seconds
-                        timestamp = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p") # <-- Added :%S
+                    with open(file_path, 'w', encoding='utf-8') as file:
+                        file.write(self.text_area.get(1.0, tk.END).rstrip('\n') + '\n')
+                        self.current_file = file_path
+                        timestamp = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
                         status_text = f"Status: Saved to {self.current_file} at {timestamp}"
                         self.status_bar.config(text=status_text)
                         self.tooltip.set_text(status_text)
-                        # Update title after saving with filename only
-                        filename = os.path.basename(self.current_file) # <-- Get filename
-                        self.root.title(f"Notething - {filename}") # <-- Use filename in title
+                        filename = os.path.basename(self.current_file)
+                        self.root.title(f"Notething - {filename}")
                 except Exception as e:
                     messagebox.showerror("Error Saving File", f"Could not save file:\n{e}")
 
@@ -880,8 +930,49 @@ class Notepad:
             print(f"Could not parse dropped data: {event.data}")
 
     # --- Add the new method to update line colors ---
+    def _capitalize_heading_words(self, text):
+        """Capitalize the first letter of each word in a heading."""
+        # Split into words, keeping spaces intact
+        words = text.split(' ')
+        capitalized_words = []
+        
+        for word in words:
+            if word:  # Only process non-empty strings
+                # Capitalize first letter, lowercase the rest
+                capitalized_words.append(word[0].upper() + word[1:].lower())
+            else:
+                # Preserve empty strings (spaces)
+                capitalized_words.append(word)
+        
+        return ' '.join(capitalized_words)
+
+    def _format_heading_line(self, line):
+        """Format a heading line with proper capitalization."""
+        # Count leading '#' characters
+        heading_level = 0
+        for char in line:
+            if char == '#':
+                heading_level += 1
+            else:
+                break
+            
+        # Check if it's a valid heading (# followed by space)
+        if heading_level > 0 and heading_level <= 3 and len(line) > heading_level:
+            if line[heading_level] == ' ':
+                # Split into prefix and content
+                prefix = line[:heading_level + 1]  # Include the space
+                content = line[heading_level + 1:]  # Get text after '# '
+                
+                # Capitalize the content
+                capitalized_content = self._capitalize_heading_words(content)
+                
+                # Return the formatted line
+                return prefix + capitalized_content
+                
+        return line
+
     def _update_line_formatting(self):
-        """Update dynamic line formatting"""
+        """Update the formatting of all lines in the text area."""
         if not Notepad.line_formatting_enabled:
             # Remove all formatting when disabled
             self.text_area.tag_remove("green_line", "1.0", tk.END)
@@ -892,6 +983,15 @@ class Notepad:
             self.text_area.tag_remove("normal_line", "1.0", tk.END)
             return
 
+        # Store current cursor position and selection
+        current_cursor = self.text_area.index(tk.INSERT)
+        try:
+            selection_start = self.text_area.index(tk.SEL_FIRST)
+            selection_end = self.text_area.index(tk.SEL_LAST)
+            has_selection = True
+        except tk.TclError:
+            has_selection = False
+
         # Remove existing tags first to reset colors
         self.text_area.tag_remove("green_line", "1.0", tk.END)
         self.text_area.tag_remove("blue_line", "1.0", tk.END)
@@ -900,40 +1000,70 @@ class Notepad:
         self.text_area.tag_remove("bold_line", "1.0", tk.END)
         self.text_area.tag_remove("normal_line", "1.0", tk.END)
 
-        # Iterate through each line
-        # Get the index of the last character + 1 line (the line count)
-        last_line_str = self.text_area.index(f"{tk.END}-1c").split('.')[0]
-        # Handle empty text area case
-        if not last_line_str:
-             return
-        last_line = int(last_line_str)
-
-
-        for i in range(1, last_line + 1):
-            line_start = f"{i}.0"
-            line_end = f"{i}.end"
-            line_content = self.text_area.get(line_start, line_end)
-            stripped_line = line_content.lstrip() # Strip whitespace once
-
-            # Check conditions after stripping leading whitespace
-            # Combine X and C for the grey tag
-            if stripped_line.startswith("X ") or stripped_line.startswith("C "):
-                self.text_area.tag_add("grey_line", line_start, line_end) # Apply GREY tag
-            elif stripped_line.startswith("N "): # Check for N second
-                self.text_area.tag_add("green_line", line_start, line_end) # Apply GREEN tag
-            elif stripped_line.startswith("T "): # Check for T third
-                self.text_area.tag_add("blue_line", line_start, line_end) # Apply BLUE tag
-            elif stripped_line.startswith("M "): # Check for M fourth
-                self.text_area.tag_add("maroon_line", line_start, line_end) #Apply MAROON tag
-            elif stripped_line.startswith("# ") or stripped_line.startswith("## ") or stripped_line.startswith("### "): # Check for headings
-                self.text_area.tag_add("bold_line", line_start, line_end) # Apply HEADING tag
+        # Process all lines
+        content = self.text_area.get("1.0", tk.END)
+        lines = content.split('\n')
+        modified = False
+        
+        for i, line in enumerate(lines):
+            # Get line number (1-based)
+            line_num = i + 1
+            line_start = f"{line_num}.0"
+            line_end = f"{line_num}.end"
+            
+            # Strip whitespace for prefix checking but keep original line for display
+            stripped_line = line.lstrip()
+            
+            # Format headings (H1-H3) if line starts with #
+            if stripped_line.startswith('#'):
+                formatted_line = self._format_heading_line(line)
+                if formatted_line != line:
+                    modified = True
+                    self.text_area.delete(line_start, line_end)
+                    self.text_area.insert(line_start, formatted_line)
+                # Apply bold tag for headings
+                self.text_area.tag_add("bold_line", line_start, line_end)
+                continue  # Skip other formatting for heading lines
+            
+            # Apply color formatting based on line prefix
+            if stripped_line.startswith('T '):
+                self.text_area.tag_add("blue_line", line_start, line_end)
+            elif stripped_line.startswith('N '):
+                self.text_area.tag_add("green_line", line_start, line_end)
+            elif stripped_line.startswith('X ') or stripped_line.startswith('C '):
+                self.text_area.tag_add("grey_line", line_start, line_end)
+            elif stripped_line.startswith('M '):
+                self.text_area.tag_add("maroon_line", line_start, line_end)
             else:
-                # Apply normal color tag if none of the conditions are met
                 self.text_area.tag_add("normal_line", line_start, line_end)
 
+        # Restore cursor position and selection if they existed
+        if modified:
+            self.text_area.mark_set(tk.INSERT, current_cursor)
+            if has_selection:
+                self.text_area.tag_add(tk.SEL, selection_start, selection_end)
+
     def _update_line_formatting_event(self, event=None):
-        """Callback for KeyRelease event to update line formatting."""
-        # Optional: Add checks here if needed (e.g., ignore certain keys)
+        """Handle line formatting after key events."""
+        # Get the current line
+        current_line = self.text_area.get("insert linestart", "insert lineend")
+        
+        # Only process if the line starts with a heading marker
+        if current_line.startswith('#'):
+            # Store cursor position
+            cursor_pos = self.text_area.index(tk.INSERT)
+            
+            # Format the line
+            formatted_line = self._format_heading_line(current_line)
+            if formatted_line != current_line:
+                # Replace the line content
+                self.text_area.delete("insert linestart", "insert lineend")
+                self.text_area.insert("insert linestart", formatted_line)
+                
+                # Restore cursor position
+                self.text_area.mark_set(tk.INSERT, cursor_pos)
+        
+        # Continue with regular line formatting
         self._update_line_formatting()
     # --- End new method ---
 

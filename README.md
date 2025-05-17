@@ -31,6 +31,7 @@ T Dynamic Line Formatting
 	X Make sure that setting applies to entire document when dialog is closed i.e. formatign is stripped for entire document when DLF is unchecked
 	T Generalise the rules, so that the user can define them, put this in the settings dialog.
 X File > New works differently depending on whether the app is being launched for the first time (first window) or if it's another window being opened
+T Ensure all markdown h1, h2, h3 headings have the first letter of each word on that line captitalised
 
 
 ## Bugs
