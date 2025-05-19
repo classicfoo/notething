@@ -36,10 +36,12 @@ T Change the insert_time function to be more generic. The time should be whateve
 X Capitalise the first word in line (excluding "T ", "N ", "X ", "C ", "M "), whitespace characters and "# ", "## " and "### ". Add this to the settings.
 T Find and replace dynamic line formattting to be updated right after replacement is done.
 T Make replace all the default when pressing enter
-	T Do we want to remove the alert after replacing all? 
+	C Do we want to remove the alert after replacing all? No
 		N Maybe make it so that left and right keys select the different buttons and pressing enter will depend on what button is selected.
+	X Remember find and replace text across sessions
 T Make F5 and F6 more generic
 	T Make it so that user can define the date format and remember it
+
 
 ## Bugs
 X Tkcalendar doesn't open in centre of the screen straight away
@@ -59,15 +61,19 @@ T Arrow keys doesn't move dates on calendar
 X Checkboxes not showing properly for settings. 
 X Open file dialog makes other window focused.
 X Ctrl+Shift+Home not working 
+T Shift+tab does not work
 
 # Test Area
 
-T Asdfasf 
-	T Testing
-	T This is a nested bullet
-	T This is a nested bullet
+M Asdfasf 
+	M Testing
+	M This is a nested bullet
+	M This is a nested bullet
+	
 T This is a bullet
-T This is a bullet
+	X This is a nested bullet
+
+
 T This is a bullet
 T This is a bullet. 
 

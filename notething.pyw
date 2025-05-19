@@ -156,6 +156,8 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
             # Add Swap button
             self.swap_btn = ttk.Button(entry_frame, text="⇅", width=3, command=self._swap_fields)
             self.swap_btn.grid(row=0, column=2, rowspan=2, padx=(5,0), pady=2, sticky='ns')
+            # Add Return key binding for swap button
+            self.swap_btn.bind("<Return>", lambda e: self._swap_fields())
             
             # Configure tooltip for swap button
             self.swap_tooltip = Tooltip(self.swap_btn)
@@ -188,6 +190,8 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
             self.replace_btn.pack(side=tk.LEFT, padx=2, pady=2)
             self.replace_all_btn = ttk.Button(button_frame, text="Replace All", command=self.replace_all)
             self.replace_all_btn.pack(side=tk.LEFT, padx=2, pady=2)
+            # Add binding for Return key when Replace All button has focus
+            self.replace_all_btn.bind("<Return>", lambda e: self.replace_all())
 
         # --- Initial Focus and Bindings ---
         self.find_entry.focus_set() # Start cursor in "Find what"
@@ -196,7 +200,9 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         # Bind Enter key in find entry to Find Next
         self.find_entry.bind("<Return>", lambda event: self.find_next())
         if replace_mode:
-             self.replace_entry.bind("<Return>", lambda event: self.replace())
+            self.replace_entry.bind("<Return>", lambda event: self.replace_all())
+            # Set focus to Replace All button after a brief delay
+            self.after(100, lambda: self.replace_all_btn.focus_set())
 
         # --- Bind Escape key to close the dialog ---
         self.bind("<Escape>", lambda event: self._cleanup_custom_tags_and_destroy())
@@ -1313,8 +1319,19 @@ class Notepad:
             sel_first_idx = self.text_area.index(tk.SEL_FIRST)
             sel_last_idx = self.text_area.index(tk.SEL_LAST)
         except tk.TclError: # No selection
-            # No standard behavior for Shift-Tab without selection in simple editors
-            return "break" 
+            # When no selection, try to outdent current line
+            current_line = self.text_area.index(tk.INSERT).split('.')[0]
+            line_start = f"{current_line}.0"
+            
+            # Check if line starts with a tab or spaces
+            first_char = self.text_area.get(line_start, f"{line_start}+1c")
+            if first_char == "\t":
+                self.text_area.delete(line_start, f"{line_start}+1c")
+                return "break"
+            elif self.text_area.get(line_start, f"{line_start}+4c") == "    ":
+                self.text_area.delete(line_start, f"{line_start}+4c")
+                return "break"
+            return "break"
 
         first_line_num = int(sel_first_idx.split('.')[0])
         last_line_num_sel = int(sel_last_idx.split('.')[0])
@@ -1336,25 +1353,29 @@ class Notepad:
         try:
             for i in range(first_line_num, last_line_to_process + 1):
                 current_shift = 0
-                if self.text_area.get(f"{i}.0", f"{i}.1") == "\t":
-                    self.text_area.delete(f"{i}.0", f"{i}.1")
+                line_start = f"{i}.0"
+                
+                # Check for tab first
+                if self.text_area.get(line_start, f"{line_start}+1c") == "\t":
+                    self.text_area.delete(line_start, f"{line_start}+1c")
                     current_shift = -1
-                    modified_count +=1
-                # Add elif for spaces if needed:
-                # elif self.text_area.get(f"{i}.0", f"{i}.4") == "    ":
-                #     self.text_area.delete(f"{i}.0", f"{i}.4")
-                #     current_shift = -4
-                #     modified_count += 1
+                    modified_count += 1
+                # Then check for spaces
+                elif self.text_area.get(line_start, f"{line_start}+4c") == "    ":
+                    self.text_area.delete(line_start, f"{line_start}+4c")
+                    current_shift = -4
+                    modified_count += 1
                 
                 if i == first_line_num:
                     sel_first_line_char_shift = current_shift
-                if i == last_line_num_sel: # If the line where selection ends was outdented
+                if i == last_line_num_sel:
                     sel_last_line_char_shift = current_shift
             
             if modified_count > 0:
                 self.text_area.edit_separator()
                 self.text_area.tag_remove(tk.SEL, "1.0", tk.END)
 
+                # Adjust selection indices based on the shifts
                 adj_sel_first_char_idx = max(0, int(sel_first_idx.split('.')[1]) + sel_first_line_char_shift)
                 adj_sel_first = f"{first_line_num}.{adj_sel_first_char_idx}"
                 
@@ -1362,11 +1383,13 @@ class Notepad:
                 adj_sel_last = f"{last_line_num_sel}.{adj_sel_last_char_idx}"
                 
                 # Ensure selection direction is maintained (start <= end)
-                if self.text_area.compare(adj_sel_first, ">", adj_sel_last):
-                    adj_sel_last = adj_sel_first # Collapse selection if it inverted
-
-                self.text_area.tag_add(tk.SEL, adj_sel_first, adj_sel_last)
-                self.text_area.mark_set(tk.INSERT, adj_sel_last)
+                if self.text_area.compare(adj_sel_first, "<=", adj_sel_last):
+                    self.text_area.tag_add(tk.SEL, adj_sel_first, adj_sel_last)
+                    self.text_area.mark_set(tk.INSERT, adj_sel_last)
+                else:
+                    # If selection would invert, collapse it to the start
+                    self.text_area.mark_set(tk.INSERT, adj_sel_first)
+                
                 self._update_line_formatting()
         finally:
             self.text_area.config(autoseparators=original_autoseparators)
@@ -1589,6 +1612,9 @@ class Notepad:
         # Add F5 and F6 bindings
         self.text_area.bind("<F5>", lambda e: self.insert_sydney_time())
         self.text_area.bind("<F6>", lambda e: self.prompt_and_insert_date())
+        
+        # Add explicit Shift+Tab binding
+        self.text_area.bind("<Shift-Tab>", self._handle_shift_tab_key)
         
         # Suppress default text widget behaviors
         self.text_area.bind("<Control-k>", lambda e: "break")  # Suppress delete to end of line
