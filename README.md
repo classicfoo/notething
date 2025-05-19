@@ -32,8 +32,8 @@ T Dynamic Line Formatting
 	T Generalise the rules, so that the user can define them, put this in the settings dialog.
 X File > New works differently depending on whether the app is being launched for the first time (first window) or if it's another window being opened
 T Ensure all markdown h1, h2, h3 headings have the first letter of each word on that line captitalised
-T change the insert_time function to be more generic. The time should be whatever is set on the user's system. More generic naming makes the code more maintainable. this app is meant to be for general use. 
-T Capitalise the first word in line (excluding "T ", "N ", "X ", "C ", "M "), whitespace characters and "# ", "## " and "### ". Add this to the settings.
+T Change the insert_time function to be more generic. The time should be whatever is set on the user's system. More generic naming makes the code more maintainable. this app is meant to be for general use. 
+X Capitalise the first word in line (excluding "T ", "N ", "X ", "C ", "M "), whitespace characters and "# ", "## " and "### ". Add this to the settings.
 T Find and replace dynamic line formattting to be updated right after replacement is done.
 T Make replace all the default when pressing enter
 	T Do we want to remove the alert after replacing all? 
@@ -42,7 +42,7 @@ T Make F5 and F6 more generic
 	T Make it so that user can define the date format and remember it
 
 ## Bugs
-X tkcalendar doesn't open in centre of the screen straight away
+X Tkcalendar doesn't open in centre of the screen straight away
 X Find in seletion doesn't work
 X Ctrl + Home is not working (should take user to beginning of file)
 X After adding a date using F6 calendar, update line colour
@@ -62,11 +62,19 @@ X Ctrl+Shift+Home not working
 
 # Test Area
 
-T asdfasf 
-	T testing
-	
-T asdfasf
-T asdfasfa
+T Asdfasf 
+	T Testing
+	T This is a nested bullet
+	T This is a nested bullet
+T This is a bullet
+T This is a bullet
+T This is a bullet
+T This is a bullet. 
+
+## This Is A Heading
+
+T Asdfasf
+T Asdfasfa
 
 
 # Study

@@ -511,6 +511,12 @@ class Notepad:
     # Add this with other class variables at the start of Notepad class
     auto_capitalize_headings = True  # Default to enabled
 
+    # Add this with other class variables at the start of Notepad class
+    auto_capitalize_first_word = True  # Default to enabled
+
+    # Add this with other class variables at the start of Notepad class
+    auto_capitalize_indented = True  # Default to enabled
+
     def __init__(self, root, initial_file=None):
         self.root = root
         self.root.title("Notething")
@@ -1014,21 +1020,30 @@ class Notepad:
             line_start = f"{line_num}.0"
             line_end = f"{line_num}.end"
             
-            # Strip whitespace for prefix checking but keep original line for display
+            # Get stripped line for prefix checking
             stripped_line = line.lstrip()
             
-            # Format headings (H1-H3) if line starts with # and auto-capitalize is enabled
-            if stripped_line.startswith('#'):
-                if Notepad.auto_capitalize_headings:
-                    formatted_line = self._format_heading_line(line)
-                    if formatted_line != line:
-                        modified = True
-                        self.text_area.delete(line_start, line_end)
-                        self.text_area.insert(line_start, formatted_line)
-                # Apply bold tag for headings regardless of capitalization
-                self.text_area.tag_add("bold_line", line_start, line_end)
-                continue
+            # Format the line
+            formatted_line = line
             
+            # Auto-capitalize first word if enabled
+            if Notepad.auto_capitalize_first_word:
+                formatted_line = self._capitalize_first_word(formatted_line)
+                
+            # Format headings if enabled
+            if stripped_line.startswith('#') and Notepad.auto_capitalize_headings:
+                formatted_line = self._format_heading_line(formatted_line)
+                
+            # Apply formatting if line changed
+            if formatted_line != line:
+                modified = True
+                self.text_area.delete(line_start, line_end)
+                self.text_area.insert(line_start, formatted_line)
+                
+            # Apply bold tag for headings
+            if stripped_line.startswith('#'):
+                self.text_area.tag_add("bold_line", line_start, line_end)
+                
             # Apply color formatting based on line prefix
             if stripped_line.startswith('T '):
                 self.text_area.tag_add("blue_line", line_start, line_end)
@@ -1665,6 +1680,8 @@ class Notepad:
                 f.write(f"match_case={int(Notepad.last_match_case_setting)}\n")
                 f.write(f"line_formatting={int(Notepad.line_formatting_enabled)}\n")
                 f.write(f"auto_capitalize_headings={int(Notepad.auto_capitalize_headings)}\n")
+                f.write(f"auto_capitalize_first_word={int(Notepad.auto_capitalize_first_word)}\n")
+                f.write(f"auto_capitalize_indented={int(Notepad.auto_capitalize_indented)}\n")
                 
             # Also save recent files
             self._save_recent_files()
@@ -1690,6 +1707,10 @@ class Notepad:
                                 Notepad.line_formatting_enabled = bool(int(value))
                             elif key == "auto_capitalize_headings":
                                 Notepad.auto_capitalize_headings = bool(int(value))
+                            elif key == "auto_capitalize_first_word":
+                                Notepad.auto_capitalize_first_word = bool(int(value))
+                            elif key == "auto_capitalize_indented":
+                                Notepad.auto_capitalize_indented = bool(int(value))
             
             # Also load recent files
             self._load_recent_files()
@@ -1719,6 +1740,65 @@ class Notepad:
             else:
                 self.options_menu.entryconfig("Reopen Last File on Startup", selectcolor="white")
 
+    # Add this method to Notepad class
+    def _capitalize_first_word(self, line):
+        """Capitalize the first word in a line, respecting special prefixes and indentation."""
+        # Skip empty lines
+        if not line.strip():
+            return line
+            
+        # Check indentation
+        leading_space = ''
+        for char in line:
+            if char.isspace():
+                leading_space += char
+            else:
+                break
+            
+        # Skip indented lines if the setting is disabled
+        if not Notepad.auto_capitalize_indented and leading_space:
+            return line
+            
+        # Get the content after leading whitespace
+        content = line[len(leading_space):]
+        if not content:  # If line is only whitespace
+            return line
+    
+        # Handle special prefixes
+        prefixes = ['T ', 'N ', 'X ', 'C ', 'M ']
+        for prefix in prefixes:
+            if content.startswith(prefix):
+                # Split remaining text into words
+                remaining = content[2:].lstrip()
+                if remaining:
+                    # Capitalize first word after prefix
+                    first_word = remaining.split()[0]
+                    capitalized = first_word[0].upper() + first_word[1:] if len(first_word) > 1 else first_word.upper()
+                    return leading_space + prefix + content[2:].replace(first_word, capitalized, 1)
+                return line
+        
+        # Handle heading prefixes
+        heading_prefixes = ['# ', '## ', '### ']
+        for prefix in heading_prefixes:
+            if content.startswith(prefix):
+                remaining = content[len(prefix):].lstrip()
+                if remaining:
+                    # Capitalize first word after heading prefix
+                    first_word = remaining.split()[0]
+                    capitalized = first_word[0].upper() + first_word[1:] if len(first_word) > 1 else first_word.upper()
+                    return leading_space + prefix + content[len(prefix):].replace(first_word, capitalized, 1)
+                return line
+        
+        # Handle regular lines
+        words = content.split()
+        if words:
+            # Capitalize first word
+            first_word = words[0]
+            capitalized = first_word[0].upper() + first_word[1:] if len(first_word) > 1 else first_word.upper()
+            return leading_space + content.replace(first_word, capitalized, 1)
+        
+        return line
+
 # Add this after the other dialog classes
 class SettingsDialog(tk.Toplevel, CenterDialogMixin):
     def __init__(self, master, notepad):
@@ -1735,6 +1815,10 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         self.reopen_last_var = tk.BooleanVar(self, value=bool(Notepad.reopen_last_file))
         self.match_case_var = tk.BooleanVar(self, value=bool(Notepad.last_match_case_setting))
         self.line_format_var = tk.BooleanVar(self, value=bool(Notepad.line_formatting_enabled))
+        self.auto_capitalize_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_headings))
+        self.auto_capitalize_first_word_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_first_word))
+        # Add the new variable initialization here
+        self.auto_capitalize_indented_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_indented))
         
         # Create main frame
         main_frame = ttk.Frame(self, padding="10")
@@ -1791,6 +1875,30 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         )
         capitalize_check.pack(anchor='w')
         
+        # Add new variable for auto-capitalize first word setting
+        self.auto_capitalize_first_word_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_first_word))
+        
+        # Add new section for Text Formatting Settings
+        text_format_frame = ttk.LabelFrame(main_frame, text="Text Formatting", padding="5")
+        text_format_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        capitalize_first_word_check = ttk.Checkbutton(
+            text_format_frame,
+            text="Auto-capitalize first word in lines",
+            variable=self.auto_capitalize_first_word_var,
+            command=lambda: self._update_checkbox_state(self.auto_capitalize_first_word_var)
+        )
+        capitalize_first_word_check.pack(anchor='w')
+        
+        # Add the new checkbox
+        capitalize_indented_check = ttk.Checkbutton(
+            text_format_frame,
+            text="Include indented lines in auto-capitalization",
+            variable=self.auto_capitalize_indented_var,
+            command=lambda: self._update_checkbox_state(self.auto_capitalize_indented_var)
+        )
+        capitalize_indented_check.pack(anchor='w')
+        
         # Buttons
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=(5, 0))
@@ -1822,6 +1930,8 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         Notepad.last_match_case_setting = bool(self.match_case_var.get())
         Notepad.line_formatting_enabled = bool(self.line_format_var.get())
         Notepad.auto_capitalize_headings = bool(self.auto_capitalize_var.get())
+        Notepad.auto_capitalize_first_word = bool(self.auto_capitalize_first_word_var.get())
+        Notepad.auto_capitalize_indented = bool(self.auto_capitalize_indented_var.get())
         self.notepad._save_settings()
         # Apply formatting changes immediately
         self.notepad._update_line_formatting()
