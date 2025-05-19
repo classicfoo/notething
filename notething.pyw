@@ -1597,25 +1597,35 @@ class Notepad:
         """Handle Ctrl+Home to move to the beginning of the document."""
         current_pos = self.text_area.index(tk.INSERT)
         
-        # If Shift is pressed, extend the selection
+        # If Shift is pressed, extend/modify the selection
         if event.state & 0x1:  # 0x1 is the Shift modifier
             try:
-                # If there's already a selection, maintain its end
+                # Check if there's an existing selection
+                sel_start = self.text_area.index(tk.SEL_FIRST)
                 sel_end = self.text_area.index(tk.SEL_LAST)
-                self.text_area.tag_add(tk.SEL, "1.0", sel_end)
+                
+                # If cursor is at selection start, keep selection end as anchor
+                if self.text_area.compare(current_pos, "==", sel_start):
+                    self.text_area.tag_remove(tk.SEL, "1.0", tk.END)
+                    self.text_area.tag_add(tk.SEL, "1.0", sel_end)
+                else:
+                    # If cursor is at selection end or no selection,
+                    # extend selection from current position to start
+                    self.text_area.tag_remove(tk.SEL, "1.0", tk.END)
+                    self.text_area.tag_add(tk.SEL, "1.0", current_pos)
             except tk.TclError:
-                # If no selection, create one from current pos to start
+                # No existing selection, create one from current pos to start
                 self.text_area.tag_add(tk.SEL, "1.0", current_pos)
+        else:
+            # No Shift key - just move cursor and clear selection
+            self.text_area.tag_remove(tk.SEL, "1.0", tk.END)
         
         # Move cursor to the beginning of the document
         self.text_area.mark_set(tk.INSERT, "1.0")
         
         # Make sure the beginning is visible
         self.text_area.see("1.0")
-
-        # Remove any selection highlights when navigating
-        self.text_area.tag_remove(tk.SEL, "1.0", tk.END)
-       
+        
         return "break"  # Prevent default behavior
 
     def _handle_ctrl_end(self, event=None):

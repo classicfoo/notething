@@ -58,7 +58,7 @@ T Pressing enter a few time on line with heading doesn't work as expected
 T Arrow keys doesn't move dates on calendar
 X Checkboxes not showing properly for settings. 
 X Open file dialog makes other window focused.
-T Ctrl+Shift+Home not working 
+X Ctrl+Shift+Home not working 
 
 # Test Area
 
