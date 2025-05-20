@@ -23,7 +23,7 @@ X Suppress default text widget behaviours
 	X Ctrl + D  # Delete character after cursor
 	X Ctrl + O  # Inserts newline
 X Remember match case settings
-T Auto suggest filenames by looking at the first markdown H1 in file and then using that ensuring that the filename is prepped so that it's valid. the end result should have a filename in lowercase and each word is separated by underscores. 
+X Auto suggest filenames by looking at the first markdown H1 in file and then using that ensuring that the filename is prepped so that it's valid. the end result should have a filename in lowercase and each word is separated by underscores. 
 T Make markdown H1, H2 and H3 headings always be capitalised for each word on that line
 T Dynamic Line Formatting
 	X Rename TNX to Dynamic line formatting (DLF)
@@ -31,17 +31,17 @@ T Dynamic Line Formatting
 	X Make sure that setting applies to entire document when dialog is closed i.e. formatign is stripped for entire document when DLF is unchecked
 	T Generalise the rules, so that the user can define them, put this in the settings dialog.
 X File > New works differently depending on whether the app is being launched for the first time (first window) or if it's another window being opened
-T Ensure all markdown h1, h2, h3 headings have the first letter of each word on that line captitalised
+X Ensure all markdown h1, h2, h3 headings have the first letter of each word on that line captitalised
 T Change the insert_time function to be more generic. The time should be whatever is set on the user's system. More generic naming makes the code more maintainable. this app is meant to be for general use. 
 X Capitalise the first word in line (excluding "T ", "N ", "X ", "C ", "M "), whitespace characters and "# ", "## " and "### ". Add this to the settings.
-T Find and replace dynamic line formattting to be updated right after replacement is done.
-T Make replace all the default when pressing enter
+T Find and replace dynamic line formatting to be updated right after replacement is done.
+X Make replace all the default when pressing enter
 	C Do we want to remove the alert after replacing all? No
 		N Maybe make it so that left and right keys select the different buttons and pressing enter will depend on what button is selected.
 	X Remember find and replace text across sessions
 T Make F5 and F6 more generic
 	T Make it so that user can define the date format and remember it
-
+T Highlighter tool
 
 ## Bugs
 X Tkcalendar doesn't open in centre of the screen straight away
@@ -56,12 +56,12 @@ X Replace all doesn't work
 X When doing find and replace, it doesn't search from the beginning
 X After replacing, it should automatically find the next instance (ready for replacing)
 X Find and replace not working on new window after going file > new
-T Pressing enter a few time on line with heading doesn't work as expected
+X Pressing enter a few time on line with heading doesn't work as expected
 T Arrow keys doesn't move dates on calendar
 X Checkboxes not showing properly for settings. 
 X Open file dialog makes other window focused.
 X Ctrl+Shift+Home not working 
-T Shift+tab does not work
+X Shift+tab does not work on single lines
 
 # Test Area
 
@@ -73,9 +73,12 @@ M Asdfasf
 T This is a bullet
 	X This is a nested bullet
 
-
 T This is a bullet
 T This is a bullet. 
+
+T This is a bullet. 
+	M This is a migrated bullet
+	N This is a note
 
 ## This Is A Heading
 
