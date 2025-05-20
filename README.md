@@ -41,7 +41,7 @@ X Make replace all the default when pressing enter
 	X Remember find and replace text across sessions
 T Make F5 and F6 more generic
 	T Make it so that user can define the date format and remember it
-T Highlighter tool
+X Highlighter tool
 
 ## Bugs
 X Tkcalendar doesn't open in centre of the screen straight away
@@ -119,3 +119,14 @@ The issue with dashes appearing in the checkboxes of the Find/Replace dialog is 
 # Leveraging Pseudocode And Problem Decomposition In Implementing Markdown Heading Capitalization
 
 The successful implementation of the heading capitalization feature came after an initial failed attempt, highlighting the importance of proper planning and problem decomposition. During the second attempt, we took a more structured approach by first consulting ChatGPT to generate pseudocode and thoroughly describe the problem, which provided a fresh perspective on the solution. This new algorithm, which systematically handles word capitalization through _capitalize_heading_words and heading structure management via _format_heading_line, was then successfully integrated into the application. However, the implementation still had an oversight where the _update_line_formatting_event method didn't check the user's preference setting (auto_capitalize_headings), causing automatic formatting to occur even when disabled. This issue was ultimately resolved by adding a condition check, but the journey from failed attempt to successful implementation demonstrates how breaking down a problem and viewing it from a different angle, combined with proper planning and pseudocode, can lead to more effective solutions in software development.
+
+
+# F7 Highlighter Tool: Quick Text Highlighting With Visual Feedback
+
+The highlighter tool is a simple yet effective feature that allows users to highlight text in the editor using the F7 key. It works in two main ways: you can highlight an entire line when no text is selected, or highlight specific text when you have made a selection.
+
+When you press F7 with no text selected, the tool automatically targets the entire line where your cursor is located. If that line isn't already highlighted, it adds a yellow highlight; if it's already highlighted, pressing F7 removes the highlight. This makes it easy to quickly highlight important lines in your notes.
+
+When you have text selected and press F7, the tool works slightly differently. Instead of highlighting the whole line, it only highlights your selected text. If any part of your selection was already highlighted, pressing F7 removes all highlighting within the selection. This gives you precise control over which parts of your text are highlighted. The tool uses Tkinter's tag system to apply the highlighting, and can be enabled or disabled through the settings menu, with your preference being saved between sessions.
+
+The tool provides clear visual feedback through its color system. Regular highlights appear in yellow, while selected text appears with a light grey background. When you select text that's already highlighted, you see a muddy yellow-grey color that naturally shows the overlap between the two states. This intuitive color mixing helps you easily identify text that is both selected and highlighted at the same time.
