@@ -523,6 +523,9 @@ class Notepad:
     # Add this with other class variables at the start of Notepad class
     auto_capitalize_indented = True  # Default to enabled
 
+    # Add after other class variables in Notepad class
+    highlight_enabled = True  # Default to enabled
+
     def __init__(self, root, initial_file=None):
         self.root = root
         self.root.title("Notething")
@@ -678,6 +681,20 @@ class Notepad:
 
         # Bind the window close button (X)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close_window)
+
+        # Add after other tag configurations in __init__ method, where other tags are configured
+        self.text_area.tag_configure("highlight", background="yellow")
+        self.text_area.tag_configure("highlight_selected", background="#E9E969")  # Grey-yellow for overlap
+        self.text_area.tag_configure(tk.SEL, background="lightgrey", foreground="black")  # Explicitly set selection colors
+
+        # Set tag priorities (lower ones show through)
+        self.text_area.tag_lower("highlight")  # Bottom layer
+        self.text_area.tag_raise("highlight_selected", "highlight")  # Middle layer
+        self.text_area.tag_raise(tk.SEL, "highlight")  # Top layer, but configured to show highlight_selected
+
+        # Add these bindings in __init__ after other bindings
+        self.text_area.bind('<<Selection>>', self._update_highlight_selection)
+        self.text_area.bind('<ButtonRelease-1>', self._update_highlight_selection)
 
     def create_menu(self):
         # tk.Menu is standard, ttk doesn't replace it
@@ -1629,6 +1646,9 @@ class Notepad:
         self.root.bind("<Control-o>", handle_ctrl_o)
         self.text_area.bind("<Control-o>", handle_ctrl_o)
 
+        # Add F7 binding for highlighting
+        self.text_area.bind("<F7>", self._handle_highlight)
+
     def _handle_ctrl_h(self, event):
         """Handle Ctrl+H key press."""
         self.open_replace_dialog()
@@ -1708,6 +1728,7 @@ class Notepad:
                 f.write(f"auto_capitalize_headings={int(Notepad.auto_capitalize_headings)}\n")
                 f.write(f"auto_capitalize_first_word={int(Notepad.auto_capitalize_first_word)}\n")
                 f.write(f"auto_capitalize_indented={int(Notepad.auto_capitalize_indented)}\n")
+                f.write(f"highlight_enabled={int(Notepad.highlight_enabled)}\n")
                 
             # Also save recent files
             self._save_recent_files()
@@ -1737,6 +1758,8 @@ class Notepad:
                                 Notepad.auto_capitalize_first_word = bool(int(value))
                             elif key == "auto_capitalize_indented":
                                 Notepad.auto_capitalize_indented = bool(int(value))
+                            elif key == "highlight_enabled":
+                                Notepad.highlight_enabled = bool(int(value))
             
             # Also load recent files
             self._load_recent_files()
@@ -1825,6 +1848,101 @@ class Notepad:
         
         return line
 
+    # Add this new method to Notepad class
+    def _handle_highlight(self, event=None):
+        """Handle F7 key press for highlighting."""
+        if not Notepad.highlight_enabled:
+            return "break"
+            
+        try:
+            # Check if there's a selection
+            sel_start = self.text_area.index(tk.SEL_FIRST)
+            sel_end = self.text_area.index(tk.SEL_LAST)
+            
+            # Get all ranges with highlight tag within selection
+            ranges = self.text_area.tag_ranges("highlight")
+            has_highlight = False
+            
+            # Check if any part of the selection is already highlighted
+            for i in range(0, len(ranges), 2):
+                start = ranges[i]
+                end = ranges[i + 1]
+                if (self.text_area.compare(start, ">=", sel_start) and 
+                    self.text_area.compare(end, "<=", sel_end)):
+                    has_highlight = True
+                    break
+            
+            if has_highlight:
+                # Remove highlight from selection
+                self.text_area.tag_remove("highlight", sel_start, sel_end)
+            else:
+                # Add highlight to selection
+                self.text_area.tag_add("highlight", sel_start, sel_end)
+                
+        except tk.TclError:
+            # No selection - handle single line
+            cursor_pos = self.text_area.index(tk.INSERT)
+            line_start = self.text_area.index(f"{cursor_pos} linestart")
+            line_end = self.text_area.index(f"{cursor_pos} lineend")
+            
+            # Check if line is already highlighted
+            ranges = self.text_area.tag_ranges("highlight")
+            has_highlight = False
+            
+            for i in range(0, len(ranges), 2):
+                start = ranges[i]
+                end = ranges[i + 1]
+                if (self.text_area.compare(start, "==", line_start) and 
+                    self.text_area.compare(end, "==", line_end)):
+                    has_highlight = True
+                    break
+            
+            if has_highlight:
+                # Remove highlight from line
+                self.text_area.tag_remove("highlight", line_start, line_end)
+            else:
+                # Add highlight to line
+                self.text_area.tag_add("highlight", line_start, line_end)
+        
+        return "break"
+
+    # Add this method to the Notepad class
+    def _update_highlight_selection(self, event=None):
+        """Update the highlight_selected tag when selection changes"""
+        try:
+            sel_start = self.text_area.index(tk.SEL_FIRST)
+            sel_end = self.text_area.index(tk.SEL_LAST)
+            
+            # Clear previous highlight_selected tags
+            self.text_area.tag_remove("highlight_selected", "1.0", tk.END)
+            
+            # Get all highlighted ranges
+            ranges = self.text_area.tag_ranges("highlight")
+            
+            # For each highlighted range, check overlap with selection
+            for i in range(0, len(ranges), 2):
+                start = ranges[i]
+                end = ranges[i + 1]
+                
+                # If there's any overlap, apply highlight_selected tag
+                if not (self.text_area.compare(end, "<=", sel_start) or 
+                       self.text_area.compare(start, ">=", sel_end)):
+                    # Calculate overlap region using text widget's compare method
+                    if self.text_area.compare(start, "<", sel_start):
+                        overlap_start = sel_start
+                    else:
+                        overlap_start = start
+                        
+                    if self.text_area.compare(end, ">", sel_end):
+                        overlap_end = sel_end
+                    else:
+                        overlap_end = end
+                        
+                    self.text_area.tag_add("highlight_selected", overlap_start, overlap_end)
+        except tk.TclError:
+            # No selection, remove all highlight_selected tags
+            self.text_area.tag_remove("highlight_selected", "1.0", tk.END)
+
 # Add this after the other dialog classes
 class SettingsDialog(tk.Toplevel, CenterDialogMixin):
     def __init__(self, master, notepad):
@@ -1845,6 +1963,8 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         self.auto_capitalize_first_word_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_first_word))
         # Add the new variable initialization here
         self.auto_capitalize_indented_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_indented))
+        # Modify SettingsDialog class - add after other variable initializations in __init__
+        self.highlight_enabled_var = tk.BooleanVar(self, value=bool(Notepad.highlight_enabled))
         
         # Create main frame
         main_frame = ttk.Frame(self, padding="10")
@@ -1945,6 +2065,19 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         self.grab_set()
         self.focus_set()
 
+        # Add after other frames in SettingsDialog
+        # Highlighting Settings
+        highlight_frame = ttk.LabelFrame(main_frame, text="Highlighting", padding="5")
+        highlight_frame.pack(fill=tk.X, pady=(0, 10))
+
+        highlight_check = ttk.Checkbutton(
+            highlight_frame,
+            text="Enable F7 highlighting",
+            variable=self.highlight_enabled_var,
+            command=lambda: self._update_checkbox_state(self.highlight_enabled_var)
+        )
+        highlight_check.pack(anchor='w')
+
     def _update_checkbox_state(self, var):
         """Ensure checkbox state is properly updated"""
         # Force the variable to be a proper boolean
@@ -1958,6 +2091,7 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         Notepad.auto_capitalize_headings = bool(self.auto_capitalize_var.get())
         Notepad.auto_capitalize_first_word = bool(self.auto_capitalize_first_word_var.get())
         Notepad.auto_capitalize_indented = bool(self.auto_capitalize_indented_var.get())
+        Notepad.highlight_enabled = bool(self.highlight_enabled_var.get())
         self.notepad._save_settings()
         # Apply formatting changes immediately
         self.notepad._update_line_formatting()

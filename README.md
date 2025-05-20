@@ -24,7 +24,7 @@ X Suppress default text widget behaviours
 	X Ctrl + O  # Inserts newline
 X Remember match case settings
 X Auto suggest filenames by looking at the first markdown H1 in file and then using that ensuring that the filename is prepped so that it's valid. the end result should have a filename in lowercase and each word is separated by underscores. 
-T Make markdown H1, H2 and H3 headings always be capitalised for each word on that line
+X Make markdown H1, H2 and H3 headings always be capitalised for each word on that line
 T Dynamic Line Formatting
 	X Rename TNX to Dynamic line formatting (DLF)
 	X Add to settings
