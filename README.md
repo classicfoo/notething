@@ -62,6 +62,7 @@ X Checkboxes not showing properly for settings.
 X Open file dialog makes other window focused.
 X Ctrl+Shift+Home not working 
 X Shift+tab does not work on single lines
+T Highlighter actions does not undo
 
 # Test Area
 
@@ -76,6 +77,7 @@ T This is a bullet
 T This is a bullet
 T This is a bullet. 
 
+
 T This is a bullet. 
 	M This is a migrated bullet
 	N This is a note
@@ -83,8 +85,8 @@ T This is a bullet.
 ## This Is A Heading
 
 T Asdfasf
-T Asdfasfa
 
+T Asdfasfa
 
 # Study
 
