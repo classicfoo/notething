@@ -12,6 +12,8 @@ import calendar # <-- Import calendar for month names
 from tkcalendar import Calendar # <-- Import the Calendar widget
 import time # <-- Import time module
 import re
+import webbrowser # <-- Import webbrowser for opening URLs
+import subprocess # <-- Import subprocess for opening files
 
 # Add this class before the other dialog classes
 class CenterDialogMixin:
@@ -567,28 +569,58 @@ class Notepad:
         text_frame = ttk.Frame(self.root)
         text_frame.pack(expand=True, fill='both', side=tk.TOP) # Pack frame first
 
-        # Create the scrollbar (ttk)
+        # Create the scrollbar
         self.scrollbar = ttk.Scrollbar(text_frame, orient=tk.VERTICAL)
-        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # Create the text area (tk)
+        # Create the text area with custom font
         self.font = tkFont.Font(root=self.root, family="Consolas", size=11)
-        self.bold_font = tkFont.Font(root=self.root, family="Consolas", size=11, weight="bold") # New bold font
+        self.bold_font = tkFont.Font(root=self.root, family="Consolas", size=11, weight="bold")
         self.text_area = tk.Text(
-            text_frame, # Place text area in the frame
+            text_frame,
             wrap=tk.WORD,
             font=self.font,
             padx=10,
             pady=10,
-            undo=True,  # <-- Enable undo/redo stack
-            maxundo=-1,  # <-- -1 means unlimited undo levels
-            autoseparators=True,  # <-- Automatically separate undo operations
-            exportselection=False,  # <-- This is the key change that keeps selection visible when focus is lost
-            yscrollcommand=self.scrollbar.set, # Link text area scroll to scrollbar
-            selectbackground="lightgrey", # <-- Change selection background back to lightgrey
-            selectforeground="black",      # Keep selection text black
+            undo=True,
+            maxundo=-1,
+            autoseparators=True,
+            exportselection=False,
+            yscrollcommand=self.scrollbar.set,
+            selectbackground="lightgrey",
+            selectforeground="black",
+            cursor="arrow"  # Change cursor to arrow by default
         )
-        self.text_area.pack(expand=True, fill='both', side=tk.LEFT) # Pack text area after scrollbar
+
+        # Configure scrollbar to control text area
+        self.scrollbar.config(command=self.text_area.yview)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.text_area.pack(expand=True, fill='both', side=tk.LEFT)
+
+        # Add URL detection and hyperlink functionality
+        self.text_area.tag_configure("hyperlink", foreground="blue", underline=1)
+        self.text_area.tag_bind("hyperlink", "<Enter>", lambda e: self.text_area.config(cursor="hand2"))
+        self.text_area.tag_bind("hyperlink", "<Leave>", lambda e: self.text_area.config(cursor="arrow"))
+        self.text_area.bind("<Button-1>", self._handle_click)
+
+        # Combined formatting handler
+        def _update_all_formatting(event=None):
+            self._update_line_formatting()
+            self._detect_urls()
+        self._update_all_formatting = _update_all_formatting
+
+        # Bind the combined handler to all relevant events
+        self.text_area.bind("<KeyRelease>", self._update_all_formatting)
+        self.text_area.bind("<<Paste>>", lambda e: self.root.after(1, self._update_all_formatting))
+        self.text_area.bind("<Control-v>", lambda e: self.root.after(1, self._update_all_formatting))
+        self.text_area.bind("<FocusOut>", lambda e: self._update_all_formatting())
+        self.text_area.bind("<space>", lambda e: self._update_all_formatting())
+        self.text_area.bind("<Return>", lambda e: self._update_all_formatting())
+
+        # Remove any old separate bindings for _detect_urls and _update_line_formatting_event
+        # (Assume they are not rebound elsewhere)
+
+        # Initial formatting
+        self._update_all_formatting()
 
         # --- Configure Line Color Tags ---
         self.text_area.tag_configure("green_line", foreground="green")
@@ -605,10 +637,6 @@ class Notepad:
         self.text_area.drop_target_register(DND_FILES)
         self.text_area.dnd_bind('<<Drop>>', self.handle_drop) # Use generic <<Drop>>
         # --- End Drag and Drop Setup ---
-
-        # Configure scrollbar to control text area
-        self.scrollbar.config(command=self.text_area.yview)
-        # --- End Scrollbar Setup ---
 
         # Use ttk.Label for the status bar
         self.status_bar = ttk.Label(self.root, text="Status: Ready", anchor='w', padding=(5, 5))
@@ -779,20 +807,18 @@ class Notepad:
                 self.text_area.delete(1.0, tk.END)
                 self.text_area.insert(tk.END, file.read())
                 self.current_file = file_path
-                # Update title to include filename only
                 filename = os.path.basename(file_path)
                 self.root.title(f"Notething - {filename}")
                 status_text = f"Status: Opened {file_path}"
                 self.status_bar.config(text=status_text)
                 self.tooltip.set_text(status_text)
                 self._update_line_formatting()
-                
-                # Add to recent files list
                 self._add_to_recent_files(file_path)
+                self._detect_urls()  # Ensure hyperlinks are detected after loading
         except FileNotFoundError:
-             messagebox.showerror("Error Opening File", f"File not found:\n{file_path}")
-             self.new_file()
-             self.root.title("Notething")
+            messagebox.showerror("Error Opening File", f"File not found:\n{file_path}")
+            self.new_file()
+            self.root.title("Notething")
         except Exception as e:
             messagebox.showerror("Error Opening File", f"Could not open file:\n{e}")
             self.new_file()
@@ -988,7 +1014,7 @@ class Notepad:
                 
         return line
 
-    def _update_line_formatting(self):
+    def _update_line_formatting(self, event=None):
         """Update the formatting of all lines in the text area."""
         if not Notepad.line_formatting_enabled:
             # Remove all formatting when disabled
@@ -1069,6 +1095,21 @@ class Notepad:
             self.text_area.mark_set(tk.INSERT, current_cursor)
             if has_selection:
                 self.text_area.tag_add(tk.SEL, selection_start, selection_end)
+
+        # --- Hyperlink detection (at the end) ---
+        self.text_area.tag_remove("hyperlink", "1.0", tk.END)
+        text = self.text_area.get("1.0", tk.END)
+        url_pattern = r'(https?://[^\s\n]+|www\.[^\s\n]+|ftp://[^\s\n]+)'
+        win_path_pattern = r'([A-Za-z]:\\(?:[^\s<>:"|?*\r\n]+\\)*[^\s<>:"|?*\r\n]+)'
+        unix_path_pattern = r'(/[^\s<>:"|?*]+)+'
+        for pattern in [url_pattern, win_path_pattern, unix_path_pattern]:
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                start = f"1.0+{match.start()}c"
+                end = f"1.0+{match.end()}c"
+                self.text_area.tag_add("hyperlink", start, end)
+        self.text_area.tag_bind("hyperlink", "<Enter>", lambda e: self.text_area.config(cursor="hand2"))
+        self.text_area.tag_bind("hyperlink", "<Leave>", lambda e: self.text_area.config(cursor="arrow"))
+        self.text_area.tag_bind("hyperlink", "<Button-1>", self._handle_click)
 
     def _update_line_formatting_event(self, event=None):
         """Handle line formatting after key events."""
@@ -1837,6 +1878,60 @@ class Notepad:
             self.tooltip.set_text(status_text)
         else:
             messagebox.showinfo("Copy Path", "No file is currently open.")
+
+    def _detect_urls(self, event=None):
+        """Detect URLs and file paths in the text and make them clickable."""
+        self.text_area.tag_remove("hyperlink", "1.0", tk.END)
+        text = self.text_area.get("1.0", tk.END)
+        # Improved URL pattern: match until whitespace or newline
+        url_pattern = r'(https?://[^\s\n]+|www\.[^\s\n]+|ftp://[^\s\n]+)'
+        # Windows file path: C:\... (allow spaces, underscores, dashes, dots)
+        win_path_pattern = r'([A-Za-z]:\\(?:[^\s<>:"|?*\r\n]+\\)*[^\s<>:"|?*\r\n]+)'
+        # Unix path: /...
+        unix_path_pattern = r'(/[^\s<>:"|?*]+)+'
+        for pattern in [url_pattern, win_path_pattern, unix_path_pattern]:
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                start = f"1.0+{match.start()}c"
+                end = f"1.0+{match.end()}c"
+                self.text_area.tag_add("hyperlink", start, end)
+        self._update_line_formatting()
+
+        # Ensure tag_bind is set only once
+        self.text_area.tag_bind("hyperlink", "<Enter>", lambda e: self.text_area.config(cursor="hand2"))
+        self.text_area.tag_bind("hyperlink", "<Leave>", lambda e: self.text_area.config(cursor="arrow"))
+        self.text_area.tag_bind("hyperlink", "<Button-1>", self._handle_click)
+
+    def _handle_click(self, event):
+        """Handle clicks on hyperlinks by extracting the text under the cursor and opening it."""
+        index = self.text_area.index(f"@{event.x},{event.y}")
+        ranges = self.text_area.tag_ranges("hyperlink")
+        for start, end in zip(ranges[::2], ranges[1::2]):
+            if self.text_area.compare(index, '>=', start) and self.text_area.compare(index, '<', end):
+                url = self.text_area.get(start, end)
+                self._open_url_or_file(url)
+                return "break"
+        return None
+
+    def _open_url_or_file(self, path):
+        """Open a URL in the default browser or a file in its default application."""
+        try:
+            # Check if it's a URL
+            if path.startswith(('http://', 'https://', 'www.', 'ftp://')):
+                # Add http:// if it starts with www
+                if path.startswith('www.'):
+                    path = 'http://' + path
+                webbrowser.open(path)
+            # Check if it's a file path
+            elif os.path.exists(path):
+                # Use the appropriate command based on the OS
+                if os.name == 'nt':  # Windows
+                    os.startfile(path)
+                else:  # Unix-like
+                    subprocess.run(['xdg-open', path])
+            else:
+                messagebox.showinfo("Error", f"Could not open: {path}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open {path}: {str(e)}")
 
 # Add this after the other dialog classes
 class SettingsDialog(tk.Toplevel, CenterDialogMixin):
