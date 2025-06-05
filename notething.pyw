@@ -705,6 +705,8 @@ class Notepad:
         edit_menu.add_command(label="Find...", command=self.open_find_dialog, accelerator="Ctrl+F")
         edit_menu.add_command(label="Replace...", command=self.open_replace_dialog, accelerator="Ctrl+H")
         edit_menu.add_separator()
+        edit_menu.add_command(label="Copy Path to File", command=self.copy_file_path)
+        edit_menu.add_separator()
         edit_menu.add_command(label="Settings...", command=self.open_settings_dialog)
         menu_bar.add_cascade(label="Edit", menu=edit_menu)
         # --- End Edit Menu ---
@@ -1824,6 +1826,17 @@ class Notepad:
             return leading_space + content.replace(first_word, capitalized, 1)
         
         return line
+
+    def copy_file_path(self):
+        """Copy the current file path to clipboard."""
+        if self.current_file:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(self.current_file)
+            status_text = f"Status: Copied path to clipboard: {self.current_file}"
+            self.status_bar.config(text=status_text)
+            self.tooltip.set_text(status_text)
+        else:
+            messagebox.showinfo("Copy Path", "No file is currently open.")
 
 # Add this after the other dialog classes
 class SettingsDialog(tk.Toplevel, CenterDialogMixin):
