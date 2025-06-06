@@ -1488,6 +1488,15 @@ class Notepad:
             else:
                 break
 
+        # Store highlight ranges for the current line
+        highlight_ranges = []
+        for i in range(0, len(self.text_area.tag_ranges("highlight")), 2):
+            start = str(self.text_area.tag_ranges("highlight")[i])
+            end = str(self.text_area.tag_ranges("highlight")[i + 1])
+            if (self.text_area.compare(start, ">=", current_line_start_idx) and 
+                self.text_area.compare(end, "<=", current_line_end_idx)):
+                highlight_ranges.append((start, end))
+
         original_autoseparators = self.text_area.cget("autoseparators")
         self.text_area.config(autoseparators=False)
         
@@ -1509,6 +1518,24 @@ class Notepad:
                 new_cursor_pos = f"{int(current_cursor_pos.split('.')[0]) + 1}.{len(leading_whitespace)}"
                 self.text_area.mark_set(tk.INSERT, new_cursor_pos)
                 self.text_area.edit_separator()
+
+                # Restore highlight tags for the split lines
+                for start, end in highlight_ranges:
+                    # Calculate relative positions within the line
+                    start_col = int(start.split('.')[1])
+                    end_col = int(end.split('.')[1])
+                    
+                    # Handle highlight for first line (before cursor)
+                    if start_col < len(text_before_cursor):
+                        new_start = f"{current_line_start_idx}+{start_col}c"
+                        new_end = f"{current_line_start_idx}+{min(end_col, len(text_before_cursor))}c"
+                        self.text_area.tag_add("highlight", new_start, new_end)
+                    
+                    # Handle highlight for second line (after cursor)
+                    if end_col > len(text_before_cursor):
+                        new_start = f"{new_cursor_pos}+{max(0, start_col - len(text_before_cursor))}c"
+                        new_end = f"{new_cursor_pos}+{end_col - len(text_before_cursor)}c"
+                        self.text_area.tag_add("highlight", new_start, new_end)
         finally:
             self.text_area.config(autoseparators=original_autoseparators)
 
