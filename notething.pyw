@@ -1630,6 +1630,9 @@ class Notepad:
         self.text_area.bind("<F5>", lambda e: self.insert_sydney_time())
         self.text_area.bind("<F6>", lambda e: self.prompt_and_insert_date())
         
+        # Add Ctrl+Shift+H for highlighting
+        self.text_area.bind("<Control-Shift-H>", self._handle_highlight)
+        
         # Add explicit Shift+Tab binding
         self.text_area.bind("<Shift-Tab>", self._handle_shift_tab_key)
         
@@ -1646,8 +1649,6 @@ class Notepad:
         self.root.bind("<Control-o>", handle_ctrl_o)
         self.text_area.bind("<Control-o>", handle_ctrl_o)
 
-        # Add F7 binding for highlighting
-        self.text_area.bind("<F7>", self._handle_highlight)
 
     def _handle_ctrl_h(self, event):
         """Handle Ctrl+H key press."""
@@ -1850,7 +1851,7 @@ class Notepad:
 
     # Add this new method to Notepad class
     def _handle_highlight(self, event=None):
-        """Handle F7 key press for highlighting."""
+        """Handle Ctrl+Shift+H key press for highlighting."""
         if not Notepad.highlight_enabled:
             return "break"
             
@@ -2072,7 +2073,7 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
 
         highlight_check = ttk.Checkbutton(
             highlight_frame,
-            text="Enable F7 highlighting",
+            text="Enable highlighting (Ctrl+Shift+H)",
             variable=self.highlight_enabled_var,
             command=lambda: self._update_checkbox_state(self.highlight_enabled_var)
         )
