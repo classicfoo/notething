@@ -1117,8 +1117,9 @@ class Notepad:
         self.text_area.tag_remove("hyperlink", "1.0", tk.END)
         text = self.text_area.get("1.0", tk.END)
         url_pattern = r'(https?://[^\s\n]+|www\.[^\s\n]+|ftp://[^\s\n]+)'
-        win_path_pattern = r'([A-Za-z]:\\(?:[^\s<>:"|?*\r\n]+\\)*[^\s<>:"|?*\r\n]+)'
-        unix_path_pattern = r'(/[^\s<>:"|?*]+)+'
+        win_path_pattern = r'([A-Za-z]:[\\/](?:[^\s<>:"|?*\r\n]+[\\/])*[^\s<>:"|?*\r\n]+(?: [^\s<>:"|?*\r\n]+)*)'
+        # Unix path: /... (must have at least one slash after the initial slash)
+        unix_path_pattern = r'(/[^-\s<>:"|?*]+/[^-\s<>:"|?*]+(?:/[^-\s<>:"|?*]+)*)'
         for pattern in [url_pattern, win_path_pattern, unix_path_pattern]:
             for match in re.finditer(pattern, text, re.IGNORECASE):
                 start = f"1.0+{match.start()}c"
@@ -1936,10 +1937,10 @@ class Notepad:
         text = self.text_area.get("1.0", tk.END)
         # Improved URL pattern: match until whitespace or newline
         url_pattern = r'(https?://[^\s\n]+|www\.[^\s\n]+|ftp://[^\s\n]+)'
-        # Windows file path: C:\... (allow spaces, underscores, dashes, dots)
-        win_path_pattern = r'([A-Za-z]:\\(?:[^\s<>:"|?*\r\n]+\\)*[^\s<>:"|?*\r\n]+)'
-        # Unix path: /...
-        unix_path_pattern = r'(/[^\s<>:"|?*]+)+'
+        # Windows file path: C:\... (allow spaces in the filename part)
+        win_path_pattern = r'([A-Za-z]:[\\/](?:[^\s<>:"|?*\r\n]+[\\/])*[^\s<>:"|?*\r\n]+(?: [^\s<>:"|?*\r\n]+)*)'
+        # Unix path: /... (must have at least one slash after the initial slash)
+        unix_path_pattern = r'(/[^-\s<>:"|?*]+/[^-\s<>:"|?*]+(?:/[^-\s<>:"|?*]+)*)'
         for pattern in [url_pattern, win_path_pattern, unix_path_pattern]:
             for match in re.finditer(pattern, text, re.IGNORECASE):
                 start = f"1.0+{match.start()}c"
