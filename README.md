@@ -1,6 +1,32 @@
 # Readme
 
-## Features 
+## Test Area
+
+M Asdfasf 
+	M Testing
+	M This is a nested bullet
+	M This is a nested bullet
+	
+T This is a bullet
+	X This is a nested bullet
+
+T This is a bullet.
+T This is a bullet. 
+	T This is a nested bullet.
+	
+
+T This is a bullet. 
+	M This is a migrated bullet
+	N This is a note
+
+### This Is A Heading
+
+T Asdfasf
+
+T Asdfasfa
+
+
+## Features.
 - F5 current time (Sydney)
 - F6 Calendar
 - Find Dialog (Ctrl + F)
@@ -69,32 +95,6 @@ X Ctrl+Shift+Home not working
 X Shift+tab does not work on single lines
 T Highlighter actions does not undo
 T After accidently captialising every word on a line, can't undo
-
-
-# Test Area
-
-M Asdfasf 
-	M Testing
-	M This is a nested bullet
-	M This is a nested bullet
-	
-T This is a bullet
-	X This is a nested bullet
-
-T This is a bullet.
-T This is a bullet. 
-	T This is a nested bullet.
-	
-
-T This is a bullet. 
-	M This is a migrated bullet
-	N This is a note
-
-## This Is A Heading
-
-T Asdfasf
-
-T Asdfasfa
 
 # Study
 

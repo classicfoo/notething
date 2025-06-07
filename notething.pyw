@@ -531,6 +531,10 @@ class Notepad:
     # In Notepad class, add after other class variables
     auto_full_stop = False  # Default to disabled
 
+    # In Notepad class, add after other class variables
+    default_find_text = "T "
+    default_replace_text = "X "
+
     def __init__(self, root, initial_file=None):
         self.root = root
         self.root.title("Notething")
@@ -1260,17 +1264,20 @@ class Notepad:
 
         self.find_dialog = FindReplaceDialog(self.root, self.text_area, replace_mode=replace_mode)
 
-        # Pre-fill with last search values and match case setting
-        self.find_dialog.find_what_var.set(self.last_find_text)
+        # Set default values for replace dialog
         if replace_mode:
-            self.find_dialog.replace_with_var.set(self.last_replace_text)
-        self.find_dialog.match_case_var.set(Notepad.last_match_case_setting)  # Use class variable
+            self.find_dialog.find_what_var.set(Notepad.default_find_text)
+            self.find_dialog.replace_with_var.set(Notepad.default_replace_text)
+        else:
+            self.find_dialog.find_what_var.set(self.last_find_text)
+        if replace_mode:
+            self.find_dialog.match_case_var.set(Notepad.last_match_case_setting)  # Use class variable
 
         # Set focus correctly
-        if replace_mode and self.last_find_text:
-             self.find_dialog.replace_entry.focus_set()
+        if replace_mode:
+            self.find_dialog.replace_entry.focus_set()
         else:
-             self.find_dialog.find_entry.focus_set()
+            self.find_dialog.find_entry.focus_set()
 
         # Register callback for when dialog is closed
         self.find_dialog.bind("<Destroy>", self._find_dialog_closed)
@@ -1820,6 +1827,8 @@ class Notepad:
                 f.write(f"auto_capitalize_indented={int(Notepad.auto_capitalize_indented)}\n")
                 f.write(f"highlight_enabled={int(Notepad.highlight_enabled)}\n")
                 f.write(f"auto_full_stop={int(Notepad.auto_full_stop)}\n")
+                f.write(f"default_find_text={Notepad.default_find_text}\n")
+                f.write(f"default_replace_text={Notepad.default_replace_text}\n")
                 
             # Also save recent files
             self._save_recent_files()
@@ -1853,6 +1862,10 @@ class Notepad:
                                 Notepad.highlight_enabled = bool(int(value))
                             elif key == "auto_full_stop":
                                 Notepad.auto_full_stop = bool(int(value))
+                            elif key == "default_find_text":
+                                Notepad.default_find_text = value
+                            elif key == "default_replace_text":
+                                Notepad.default_replace_text = value
             
             # Also load recent files
             self._load_recent_files()
@@ -2144,8 +2157,7 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         
         # Search Settings
         search_frame = ttk.LabelFrame(main_frame, text="Search", padding="5")
-        search_frame.pack(fill=tk.X, pady=(0, 10))
-        
+        # Add search settings widgets before packing the frame
         match_case_check = ttk.Checkbutton(
             search_frame,
             text="Match case by default",
@@ -2153,7 +2165,19 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
             command=lambda: self._update_checkbox_state(self.match_case_var)
         )
         match_case_check.pack(anchor='w')
-        
+
+        ttk.Label(search_frame, text="Default Find text:").pack(anchor='w', padx=5, pady=(5,0))
+        self.default_find_text_var = tk.StringVar(self, value=Notepad.default_find_text)
+        default_find_entry = ttk.Entry(search_frame, textvariable=self.default_find_text_var, width=20)
+        default_find_entry.pack(anchor='w', padx=5, pady=(0,5))
+
+        ttk.Label(search_frame, text="Default Replace text:").pack(anchor='w', padx=5, pady=(5,0))
+        self.default_replace_text_var = tk.StringVar(self, value=Notepad.default_replace_text)
+        default_replace_entry = ttk.Entry(search_frame, textvariable=self.default_replace_text_var, width=20)
+        default_replace_entry.pack(anchor='w', padx=5, pady=(0,5))
+
+        search_frame.pack(fill=tk.X, pady=(0, 10))
+
         # Line Formatting Settings
         format_frame = ttk.LabelFrame(main_frame, text="Dynamic Line Formatting", padding="5")
         format_frame.pack(fill=tk.X, pady=(0, 10))
@@ -2262,6 +2286,8 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         Notepad.auto_capitalize_indented = bool(self.auto_capitalize_indented_var.get())
         Notepad.highlight_enabled = bool(self.highlight_enabled_var.get())
         Notepad.auto_full_stop = bool(self.auto_full_stop_var.get())
+        Notepad.default_find_text = self.default_find_text_var.get()
+        Notepad.default_replace_text = self.default_replace_text_var.get()
         self.notepad._save_settings()
         # Apply formatting changes immediately
         self.notepad._update_line_formatting()
