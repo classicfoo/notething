@@ -15,7 +15,7 @@ T This is a bullet.
 	T This is a nested bullet.
 	
 
-T This is a bullet. 
+T This is a bullet.
 	M This is a migrated bullet
 	N This is a note
 
