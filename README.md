@@ -42,6 +42,11 @@ X Make replace all the default when pressing enter
 T Make F5 and F6 more generic
 	T Make it so that user can define the date format and remember it
 X Highlighter tool
+T Add a full stop after pressing enter on a line. 
+	N If there isn't already a full stop. 
+	N Strip any whitespace from the end of the line before adding full stop.
+	N User has to press enter for it auto add the full stop. 
+	N Add a setting under text formatting to enable or disable this feature. 
 
 ## Bugs
 X Tkcalendar doesn't open in centre of the screen straight away
@@ -63,6 +68,8 @@ X Open file dialog makes other window focused.
 X Ctrl+Shift+Home not working 
 X Shift+tab does not work on single lines
 T Highlighter actions does not undo
+T After accidently captialising every word on a line, can't undo
+
 
 # Test Area
 
@@ -74,9 +81,10 @@ M Asdfasf
 T This is a bullet
 	X This is a nested bullet
 
-T This is a bullet
+T This is a bullet.
 T This is a bullet. 
-
+	T This is a nested bullet.
+	
 
 T This is a bullet. 
 	M This is a migrated bullet

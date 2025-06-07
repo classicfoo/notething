@@ -528,6 +528,9 @@ class Notepad:
     # Add after other class variables in Notepad class
     highlight_enabled = True  # Default to enabled
 
+    # In Notepad class, add after other class variables
+    auto_full_stop = False  # Default to disabled
+
     def __init__(self, root, initial_file=None):
         self.root = root
         self.root.title("Notething")
@@ -1477,6 +1480,21 @@ class Notepad:
         current_line_end_idx = self.text_area.index(f"{current_cursor_pos} lineend")
         current_line_content = self.text_area.get(current_line_start_idx, current_line_end_idx)
 
+        # --- Auto-add full stop if enabled ---
+        if getattr(Notepad, 'auto_full_stop', False):
+            if current_line_content.strip():
+                stripped = current_line_content.rstrip()
+                if not stripped.endswith(('.', '!', '?')):
+                    self.text_area.delete(current_line_start_idx, current_line_end_idx)
+                    self.text_area.insert(current_line_start_idx, stripped + '.')
+                    # Update current_line_content and adjust cursor
+                    current_line_content = stripped + '.'
+                    # If cursor was at end, move it forward by 1
+                    if self.text_area.index(current_cursor_pos) == current_line_end_idx:
+                        current_cursor_pos = f"{current_cursor_pos.split('.')[0]}.{int(current_cursor_pos.split('.')[1])+1}"
+                    current_line_end_idx = self.text_area.index(f"{current_line_start_idx} lineend")
+        # --- End auto full stop ---
+
         # Get the text before and after cursor on the current line
         text_before_cursor = self.text_area.get(current_line_start_idx, current_cursor_pos)
         text_after_cursor = self.text_area.get(current_cursor_pos, current_line_end_idx)
@@ -1801,6 +1819,7 @@ class Notepad:
                 f.write(f"auto_capitalize_first_word={int(Notepad.auto_capitalize_first_word)}\n")
                 f.write(f"auto_capitalize_indented={int(Notepad.auto_capitalize_indented)}\n")
                 f.write(f"highlight_enabled={int(Notepad.highlight_enabled)}\n")
+                f.write(f"auto_full_stop={int(Notepad.auto_full_stop)}\n")
                 
             # Also save recent files
             self._save_recent_files()
@@ -1832,6 +1851,8 @@ class Notepad:
                                 Notepad.auto_capitalize_indented = bool(int(value))
                             elif key == "highlight_enabled":
                                 Notepad.highlight_enabled = bool(int(value))
+                            elif key == "auto_full_stop":
+                                Notepad.auto_full_stop = bool(int(value))
             
             # Also load recent files
             self._load_recent_files()
@@ -2102,6 +2123,8 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         self.auto_capitalize_indented_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_indented))
         # Modify SettingsDialog class - add after other variable initializations in __init__
         self.highlight_enabled_var = tk.BooleanVar(self, value=bool(Notepad.highlight_enabled))
+        # In SettingsDialog.__init__, after other BooleanVar initializations
+        self.auto_full_stop_var = tk.BooleanVar(self, value=bool(Notepad.auto_full_stop))
         
         # Create main frame
         main_frame = ttk.Frame(self, padding="10")
@@ -2182,6 +2205,15 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         )
         capitalize_indented_check.pack(anchor='w')
         
+        # Add the checkbox for auto-full stop
+        auto_full_stop_check = ttk.Checkbutton(
+            text_format_frame,
+            text="Auto-add full stop at end of line on Enter",
+            variable=self.auto_full_stop_var,
+            command=lambda: self._update_checkbox_state(self.auto_full_stop_var)
+        )
+        auto_full_stop_check.pack(anchor='w')
+        
         # Buttons
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=(5, 0))
@@ -2229,6 +2261,7 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         Notepad.auto_capitalize_first_word = bool(self.auto_capitalize_first_word_var.get())
         Notepad.auto_capitalize_indented = bool(self.auto_capitalize_indented_var.get())
         Notepad.highlight_enabled = bool(self.highlight_enabled_var.get())
+        Notepad.auto_full_stop = bool(self.auto_full_stop_var.get())
         self.notepad._save_settings()
         # Apply formatting changes immediately
         self.notepad._update_line_formatting()
