@@ -4,8 +4,8 @@
 
 M Asdfasf 
 	M Testing
-	M This is a nested bullet
-	M This is a nested bullet
+	M This is a nested bullet 06 May 2025.
+	M This is a nested bullet 08 Jun 2025.	
 	
 M This is a bullet
 	X This is a nested bullet
@@ -73,7 +73,9 @@ X Add a full stop after pressing enter on a line.
 	N Strip any whitespace from the end of the line before adding full stop.
 	N User has to press enter for it auto add the full stop. 
 	N Add a setting under text formatting to enable or disable this feature. 
-T Make settings dialog scrollable.
+X Make settings dialog scrollable.
+T Move selected date by using arrow keys on calendar widget. 
+
 
 
 ## Bugs
@@ -96,7 +98,8 @@ X Open file dialog makes other window focused.
 X Ctrl+Shift+Home not working 
 X Shift+tab does not work on single lines
 T Highlighter actions does not undo
-T After accidently captialising every word on a line, can't undo
+T After accidently captialising every word on a line, can't undo.
+
 
 # Study
 
