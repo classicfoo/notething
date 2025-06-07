@@ -2117,159 +2117,181 @@ class Notepad:
 # Add this after the other dialog classes
 class SettingsDialog(tk.Toplevel, CenterDialogMixin):
     def __init__(self, master, notepad):
-        # Initialize the Toplevel window first
         super().__init__(master)
         self.notepad = notepad
-        
-        # Set window properties
         self.title("Settings")
         self.transient(master)
         self.resizable(False, False)
-        
-        # Initialize all BooleanVar variables with explicit parent (self) and initial values
+
+        # --- Initialize all variables at the top ---
         self.reopen_last_var = tk.BooleanVar(self, value=bool(Notepad.reopen_last_file))
         self.match_case_var = tk.BooleanVar(self, value=bool(Notepad.last_match_case_setting))
         self.line_format_var = tk.BooleanVar(self, value=bool(Notepad.line_formatting_enabled))
         self.auto_capitalize_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_headings))
         self.auto_capitalize_first_word_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_first_word))
-        # Add the new variable initialization here
         self.auto_capitalize_indented_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_indented))
-        # Modify SettingsDialog class - add after other variable initializations in __init__
         self.highlight_enabled_var = tk.BooleanVar(self, value=bool(Notepad.highlight_enabled))
-        # In SettingsDialog.__init__, after other BooleanVar initializations
         self.auto_full_stop_var = tk.BooleanVar(self, value=bool(Notepad.auto_full_stop))
-        
-        # Create main frame
-        main_frame = ttk.Frame(self, padding="10")
-        main_frame.pack(expand=True, fill=tk.BOTH)
-        
+        self.default_find_text_var = tk.StringVar(self, value=Notepad.default_find_text)
+        self.default_replace_text_var = tk.StringVar(self, value=Notepad.default_replace_text)
+
+        # --- Make dialog scrollable ---
+        content_frame = ttk.Frame(self)
+        content_frame.pack(fill="both", expand=True)
+
+        canvas = tk.Canvas(content_frame, borderwidth=0, highlightthickness=0, width=420)
+        vscroll = ttk.Scrollbar(content_frame, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vscroll.set)
+        vscroll.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+
+        main_frame = ttk.Frame(canvas, padding="16 16 16 8")
+        main_frame_id = canvas.create_window((0, 0), window=main_frame, anchor="nw")
+
+        def _on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        main_frame.bind("<Configure>", _on_frame_configure)
+
+        def _on_canvas_configure(event):
+            canvas.itemconfig(main_frame_id, width=event.width)
+        canvas.bind("<Configure>", _on_canvas_configure)
+
+        # Mousewheel scrolling (bind_all for dialog lifetime)
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        self.bind_all("<MouseWheel>", _on_mousewheel)
+        # Unbind on close
+        def unbind_mousewheel():
+            self.unbind_all("<MouseWheel>")
+        self.protocol("WM_DELETE_WINDOW", lambda: (unbind_mousewheel(), self._on_cancel()))
+        self.bind("<Escape>", lambda e: (unbind_mousewheel(), self._on_cancel()))
+        self.bind("<Return>", lambda e: (unbind_mousewheel(), self._on_ok()))
+        # Also unbind in _on_ok and _on_cancel
+        old_on_ok = self._on_ok
+        def new_on_ok(*args, **kwargs):
+            unbind_mousewheel()
+            return old_on_ok(*args, **kwargs)
+        self._on_ok = new_on_ok
+        old_on_cancel = self._on_cancel
+        def new_on_cancel(*args, **kwargs):
+            unbind_mousewheel()
+            return old_on_cancel(*args, **kwargs)
+        self._on_cancel = new_on_cancel
+
+        # Section style
+        section_font = ("TkDefaultFont", 10, "bold")
+
         # Startup Settings
-        startup_frame = ttk.LabelFrame(main_frame, text="Startup", padding="5")
-        startup_frame.pack(fill=tk.X, pady=(0, 10))
-        
+        startup_frame = ttk.LabelFrame(main_frame, text="Startup", padding="8")
+        startup_frame.pack(fill=tk.X, pady=(0, 12))
+        startup_frame.configure(labelwidget=ttk.Label(startup_frame, text="Startup", font=section_font))
         reopen_check = ttk.Checkbutton(
             startup_frame, 
             text="Reopen last file on startup",
             variable=self.reopen_last_var,
             command=lambda: self._update_checkbox_state(self.reopen_last_var)
         )
-        reopen_check.pack(anchor='w')
-        
+        reopen_check.pack(anchor='w', pady=(0, 2))
+
         # Search Settings
-        search_frame = ttk.LabelFrame(main_frame, text="Search", padding="5")
-        # Add search settings widgets before packing the frame
+        search_frame = ttk.LabelFrame(main_frame, text="Search", padding="8")
+        search_frame.pack(fill=tk.X, pady=(0, 12))
+        search_frame.configure(labelwidget=ttk.Label(search_frame, text="Search", font=section_font))
         match_case_check = ttk.Checkbutton(
             search_frame,
             text="Match case by default",
             variable=self.match_case_var,
             command=lambda: self._update_checkbox_state(self.match_case_var)
         )
-        match_case_check.pack(anchor='w')
-
-        ttk.Label(search_frame, text="Default Find text:").pack(anchor='w', padx=5, pady=(5,0))
+        match_case_check.pack(anchor='w', pady=(0, 2))
+        ttk.Label(search_frame, text="Default Find text:").pack(anchor='w', padx=2, pady=(6,0))
         self.default_find_text_var = tk.StringVar(self, value=Notepad.default_find_text)
         default_find_entry = ttk.Entry(search_frame, textvariable=self.default_find_text_var, width=20)
-        default_find_entry.pack(anchor='w', padx=5, pady=(0,5))
-
-        ttk.Label(search_frame, text="Default Replace text:").pack(anchor='w', padx=5, pady=(5,0))
+        default_find_entry.pack(anchor='w', padx=2, pady=(0,4))
+        ttk.Label(search_frame, text="Default Replace text:").pack(anchor='w', padx=2, pady=(6,0))
         self.default_replace_text_var = tk.StringVar(self, value=Notepad.default_replace_text)
         default_replace_entry = ttk.Entry(search_frame, textvariable=self.default_replace_text_var, width=20)
-        default_replace_entry.pack(anchor='w', padx=5, pady=(0,5))
+        default_replace_entry.pack(anchor='w', padx=2, pady=(0,2))
 
-        search_frame.pack(fill=tk.X, pady=(0, 10))
-
-        # Line Formatting Settings
-        format_frame = ttk.LabelFrame(main_frame, text="Dynamic Line Formatting", padding="5")
-        format_frame.pack(fill=tk.X, pady=(0, 10))
-        
+        # Dynamic Line Formatting
+        format_frame = ttk.LabelFrame(main_frame, text="Dynamic Line Formatting", padding="8")
+        format_frame.pack(fill=tk.X, pady=(0, 12))
+        format_frame.configure(labelwidget=ttk.Label(format_frame, text="Dynamic Line Formatting", font=section_font))
         format_check = ttk.Checkbutton(
             format_frame,
             text="Enable dynamic line formatting",
             variable=self.line_format_var,
             command=lambda: self._update_checkbox_state(self.line_format_var)
         )
-        format_check.pack(anchor='w')
-        
-        # Add new variable for auto-capitalize setting
-        self.auto_capitalize_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_headings))
-        
-        # Add new section for Heading Settings after Line Formatting Settings
-        heading_frame = ttk.LabelFrame(main_frame, text="Heading Settings", padding="5")
-        heading_frame.pack(fill=tk.X, pady=(0, 10))
-        
+        format_check.pack(anchor='w', pady=(0, 2))
+
+        # Heading Settings
+        heading_frame = ttk.LabelFrame(main_frame, text="Heading Settings", padding="8")
+        heading_frame.pack(fill=tk.X, pady=(0, 12))
+        heading_frame.configure(labelwidget=ttk.Label(heading_frame, text="Heading Settings", font=section_font))
         capitalize_check = ttk.Checkbutton(
             heading_frame,
             text="Auto-capitalize heading words",
             variable=self.auto_capitalize_var,
             command=lambda: self._update_checkbox_state(self.auto_capitalize_var)
         )
-        capitalize_check.pack(anchor='w')
-        
-        # Add new variable for auto-capitalize first word setting
-        self.auto_capitalize_first_word_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_first_word))
-        
-        # Add new section for Text Formatting Settings
-        text_format_frame = ttk.LabelFrame(main_frame, text="Text Formatting", padding="5")
-        text_format_frame.pack(fill=tk.X, pady=(0, 10))
-        
+        capitalize_check.pack(anchor='w', pady=(0, 2))
+
+        # Text Formatting
+        text_format_frame = ttk.LabelFrame(main_frame, text="Text Formatting", padding="8")
+        text_format_frame.pack(fill=tk.X, pady=(0, 12))
+        text_format_frame.configure(labelwidget=ttk.Label(text_format_frame, text="Text Formatting", font=section_font))
         capitalize_first_word_check = ttk.Checkbutton(
             text_format_frame,
             text="Auto-capitalize first word in lines",
             variable=self.auto_capitalize_first_word_var,
             command=lambda: self._update_checkbox_state(self.auto_capitalize_first_word_var)
         )
-        capitalize_first_word_check.pack(anchor='w')
-        
-        # Add the new checkbox
+        capitalize_first_word_check.pack(anchor='w', pady=(0, 2))
         capitalize_indented_check = ttk.Checkbutton(
             text_format_frame,
             text="Include indented lines in auto-capitalization",
             variable=self.auto_capitalize_indented_var,
             command=lambda: self._update_checkbox_state(self.auto_capitalize_indented_var)
         )
-        capitalize_indented_check.pack(anchor='w')
-        
-        # Add the checkbox for auto-full stop
+        capitalize_indented_check.pack(anchor='w', pady=(0, 2))
         auto_full_stop_check = ttk.Checkbutton(
             text_format_frame,
             text="Auto-add full stop at end of line on Enter",
             variable=self.auto_full_stop_var,
             command=lambda: self._update_checkbox_state(self.auto_full_stop_var)
         )
-        auto_full_stop_check.pack(anchor='w')
-        
-        # Buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X, pady=(5, 0))
-        
-        ok_button = ttk.Button(button_frame, text="OK", command=self._on_ok, width=10)
-        ok_button.pack(side=tk.RIGHT, padx=(5, 0))
-        
-        cancel_button = ttk.Button(button_frame, text="Cancel", command=self._on_cancel, width=10)
-        cancel_button.pack(side=tk.RIGHT)
-        
-        # Bindings
-        self.bind("<Escape>", lambda e: self._on_cancel())
-        self.bind("<Return>", lambda e: self._on_ok())
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-        
-        # Center and make modal
-        self.center_dialog()
-        self.grab_set()
-        self.focus_set()
+        auto_full_stop_check.pack(anchor='w', pady=(0, 2))
 
-        # Add after other frames in SettingsDialog
         # Highlighting Settings
-        highlight_frame = ttk.LabelFrame(main_frame, text="Highlighting", padding="5")
-        highlight_frame.pack(fill=tk.X, pady=(0, 10))
-
+        highlight_frame = ttk.LabelFrame(main_frame, text="Highlighting", padding="8")
+        highlight_frame.pack(fill=tk.X, pady=(0, 12))
+        highlight_frame.configure(labelwidget=ttk.Label(highlight_frame, text="Highlighting", font=section_font))
         highlight_check = ttk.Checkbutton(
             highlight_frame,
             text="Enable highlighting (Ctrl+Shift+H)",
             variable=self.highlight_enabled_var,
             command=lambda: self._update_checkbox_state(self.highlight_enabled_var)
         )
-        highlight_check.pack(anchor='w')
+        highlight_check.pack(anchor='w', pady=(0, 2))
+
+        # --- OK/Cancel Buttons at bottom right ---
+        button_frame = ttk.Frame(self)
+        button_frame.pack(fill=tk.X, side=tk.BOTTOM, anchor="e", pady=(0, 8), padx=16)
+        ok_button = ttk.Button(button_frame, text="OK", command=self._on_ok, width=10)
+        ok_button.pack(side=tk.RIGHT, padx=(5, 0))
+        cancel_button = ttk.Button(button_frame, text="Cancel", command=self._on_cancel, width=10)
+        cancel_button.pack(side=tk.RIGHT)
+
+        # Bindings
+        self.bind("<Escape>", lambda e: self._on_cancel())
+        self.bind("<Return>", lambda e: self._on_ok())
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+
+        # Center and make modal
+        self.center_dialog()
+        self.grab_set()
+        self.focus_set()
 
     def _update_checkbox_state(self, var):
         """Ensure checkbox state is properly updated"""
