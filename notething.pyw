@@ -567,22 +567,37 @@ class Notepad:
     auto_capitalize_first_word = True  # Default to enabled
 
     # Add this with other class variables at the start of Notepad class
-    auto_capitalize_indented = True  # Default to enabled
+    auto_capitalize_indented = False  # Default to disabled
 
     # Add after other class variables in Notepad class
     highlight_enabled = True  # Default to enabled
 
     # In Notepad class, add after other class variables
-    auto_full_stop = False  # Default to disabled
+    auto_full_stop = True  # Default to disabled
 
     # In Notepad class, add after other class variables
-    default_find_text = "T "
-    default_replace_text = "X "
+    default_find_text = ""
+    default_replace_text = ""
+    readonly_mode = False  # New setting for readonly mode
 
     def __init__(self, root, initial_file=None):
+        """Initialize the notepad."""
         self.root = root
         self.root.title("Notething")
+        self.current_file = None
+        self.readonly_var = tk.BooleanVar(value=False)  # Initialize readonly variable
         
+        # Create the text area
+        self.text_area = tk.Text(
+            self.root,
+            wrap=tk.WORD,
+            undo=True,
+            maxundo=-1,
+            autoseparators=True,
+            padx=10,
+            pady=10
+        )
+
         Notepad.open_window_count += 1
 
         # --- Window Positioning and Sizing ---
@@ -696,8 +711,6 @@ class Notepad:
         self.status_bar = ttk.Label(self.root, text="Status: Ready", anchor='w', padding=(5, 5))
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X) # Pack status bar last
 
-        self.current_file = None
-
         # Create a tooltip for the status bar
         self.tooltip = Tooltip(self.status_bar)
         self.tooltip.set_text(self.status_bar.cget("text"))
@@ -776,38 +789,42 @@ class Notepad:
         self.text_area.bind('<ButtonRelease-1>', self._update_highlight_selection)
 
     def create_menu(self):
-        # tk.Menu is standard, ttk doesn't replace it
-        menu_bar = tk.Menu(self.root)
+        """Create the application menu."""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
 
-        file_menu = tk.Menu(menu_bar, tearoff=0)
-        file_menu.add_command(label="New", command=self.new_file, accelerator='Ctrl+N')
-        file_menu.add_command(label="Open", command=self.open_file, accelerator='Ctrl+O')
-        
-        # Add submenu for recent files
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="New", command=self.new_file, accelerator="Ctrl+N")
+        file_menu.add_command(label="Open...", command=self.open_file, accelerator="Ctrl+O")
+        # Add submenu for recent files immediately after Open...
         self.recent_menu = tk.Menu(file_menu, tearoff=0)
         file_menu.add_cascade(label="Open Recent", menu=self.recent_menu)
         self._update_recent_menu()
-        
-        file_menu.add_command(label="Save", command=self.save_file, accelerator='Ctrl+S')
-        file_menu.add_command(label="Rename", command=self.rename_file)
+        file_menu.add_command(label="Save", command=self.save_file, accelerator="Ctrl+S")
+        file_menu.add_command(label="Save As...", command=self.save_as)
+        file_menu.add_command(label="Rename...", command=self.rename_file)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.quit)
 
-        menu_bar.add_cascade(label="File", menu=file_menu)
-
-        # --- Add Edit Menu ---
-        edit_menu = tk.Menu(menu_bar, tearoff=0)
-        # Add Undo/Redo if needed later using text_area.edit_undo(), text_area.edit_redo()
+        # Edit menu
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Edit", menu=edit_menu)
+        edit_menu.add_command(label="Undo", command=lambda: self.text_area.edit_undo(), accelerator="Ctrl+Z")
+        edit_menu.add_command(label="Redo", command=lambda: self.text_area.edit_redo(), accelerator="Ctrl+Y")
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Cut", command=lambda: self.text_area.event_generate("<<Cut>>"), accelerator="Ctrl+X")
+        edit_menu.add_command(label="Copy", command=lambda: self.text_area.event_generate("<<Copy>>"), accelerator="Ctrl+C")
+        edit_menu.add_command(label="Paste", command=lambda: self.text_area.event_generate("<<Paste>>"), accelerator="Ctrl+V")
+        edit_menu.add_separator()
         edit_menu.add_command(label="Find...", command=self.open_find_dialog, accelerator="Ctrl+F")
         edit_menu.add_command(label="Replace...", command=self.open_replace_dialog, accelerator="Ctrl+H")
         edit_menu.add_separator()
-        edit_menu.add_command(label="Copy Path to File", command=self.copy_file_path)
+        edit_menu.add_checkbutton(label="Read-only", command=self.toggle_readonly, variable=self.readonly_var)
+        # Add Settings at the bottom of Edit menu
         edit_menu.add_separator()
         edit_menu.add_command(label="Settings...", command=self.open_settings_dialog)
-        menu_bar.add_cascade(label="Edit", menu=edit_menu)
-        # --- End Edit Menu ---
-
-        self.root.config(menu=menu_bar)
 
     def bind_hotkeys(self):
         """Bind keyboard shortcuts."""
@@ -850,69 +867,48 @@ class Notepad:
         return "break" # Prevent default Backspace behavior
 
     def new_file(self):
-        """Opens a new, blank Notepad window."""
-        new_notepad_root = TkinterDnD.Tk()
+        self.text_area.delete(1.0, tk.END)
+        self.current_file = None
+        self._update_title()
+        self.status_bar.config(text="Status: New file")
+        self.tooltip.set_text("Status: New file")
+        # Apply line formatting/colors
+        self._update_line_formatting()
 
-        # Apply the same theme setup as the main window
-        style = ttk.Style(new_notepad_root)
+    def _load_file(self, filepath):
+        """Load a file into the text area."""
         try:
-            if new_notepad_root.tk.call('tk', 'windowingsystem') == 'win32':
-                style.theme_use('vista')
-            elif new_notepad_root.tk.call('tk', 'windowingsystem') == 'aqua':
-                style.theme_use('aqua')
-            else:
-                style.theme_use('clam')
-        except tk.TclError:
-            style.theme_use("default")
-
-        # Create a new blank Notepad instance
-        Notepad(new_notepad_root)
-
-    def _load_file(self, file_path):
-        """Loads the content of the specified file into the text area."""
-        try:
-            with open(file_path, 'r', encoding='utf-8') as file:
+            with open(filepath, 'r', encoding='utf-8') as file:
                 self.text_area.delete(1.0, tk.END)
-                self.text_area.insert(tk.END, file.read())
-                self.current_file = file_path
-                filename = os.path.basename(file_path)
-                self.root.title(f"Notething - {filename}")
-                status_text = f"Status: Opened {file_path}"
-                self.status_bar.config(text=status_text)
-                self.tooltip.set_text(status_text)
-                self._update_line_formatting()
-                self._add_to_recent_files(file_path)
-                self._detect_urls()  # Ensure hyperlinks are detected after loading
-        except FileNotFoundError:
-            messagebox.showerror("Error Opening File", f"File not found:\n{file_path}")
-            self.new_file()
-            self.root.title("Notething")
+                self.text_area.insert(1.0, file.read())
+            self.current_file = filepath
+            self.root.title(f"Notething - {os.path.basename(filepath)}")
+            
+            # Check if file is readonly and update the readonly toggle
+            is_readonly = not os.access(filepath, os.W_OK)
+            self.readonly_var.set(is_readonly)
+            
+            # Update window title to show readonly status
+            self._update_title()
+            
+            # Update status bar
+            timestamp = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
+            status_text = f"Status: Opened {filepath} at {timestamp}"
+            self.status_bar.config(text=status_text)
+            self.tooltip.set_text(status_text)
+            # Apply line formatting/colors
+            self._update_line_formatting()
         except Exception as e:
             messagebox.showerror("Error Opening File", f"Could not open file:\n{e}")
-            self.new_file()
-            self.root.title("Notething")
 
-    def open_file(self):
-        """Open a file for editing"""
-        # Show the file dialog with "All Files" as the default option
-        # Make dialog modal to the main window and ensure it stays on top
-        filepath = filedialog.askopenfilename(
-            title="Open File",
-            filetypes=[
-                ("All Files", "*.*"),  # This is now first, so it's the default
-                ("Text Files", "*.txt"),
-                ("Python Files", "*.py;*.pyw"),
-                ("Markdown Files", "*.md"),
-                ("HTML Files", "*.html;*.htm")
-            ],
-            parent=self.root  # Make dialog modal to main window
-        )
-        
-        if filepath:  # If a file was selected (not canceled)
-            self._load_file(filepath)
-            # Ensure main window gets focus back
-            self.root.focus_force()
-            self.text_area.focus_set()
+    def _update_title(self):
+        """Update the window title to show readonly status."""
+        if self.current_file:
+            filename = os.path.basename(self.current_file)
+            readonly_status = " [Read-only]" if self.readonly_var.get() else ""
+            self.root.title(f"Notething - {filename}{readonly_status}")
+        else:
+            self.root.title("Notething")
 
     def _get_suggested_filename(self):
         """Get a suggested filename based on the first H1 markdown heading."""
@@ -956,48 +952,112 @@ class Notepad:
         
         return None
 
+    def open_file(self):
+        """Open a file for editing"""
+        # Show the file dialog with "All Files" as the default option
+        # Make dialog modal to the main window and ensure it stays on top
+        filepath = filedialog.askopenfilename(
+            title="Open File",
+            filetypes=[
+                ("All Files", "*.*"),  # This is now first, so it's the default
+                ("Text Files", "*.txt"),
+                ("Python Files", "*.py;*.pyw"),
+                ("Markdown Files", "*.md"),
+                ("HTML Files", "*.html;*.htm")
+            ],
+            parent=self.root  # Make dialog modal to main window
+        )
+        
+        if filepath:  # If a file was selected (not canceled)
+            self._load_file(filepath)
+            # Ensure main window gets focus back
+            self.root.focus_force()
+            self.text_area.focus_set()
+            self._update_line_formatting()
+            self._add_to_recent_files(filepath)
+            self._detect_urls()  # Ensure hyperlinks are detected after loading
+
+    def toggle_readonly(self):
+        """Toggle the readonly status of the current file."""
+        if not self.current_file:
+            messagebox.showwarning("Read-only Toggle", "Please save the file first.")
+            self.readonly_var.set(False)
+            return
+
+        try:
+            if self.readonly_var.get():
+                # Make file readonly
+                os.chmod(self.current_file, 0o444)  # Read-only for all users
+            else:
+                # Make file writable
+                os.chmod(self.current_file, 0o666)  # Read-write for all users
+            
+            # Update window title
+            self._update_title()
+            
+            # Update status bar
+            status = "read-only" if self.readonly_var.get() else "writable"
+            status_text = f"Status: File is now {status}"
+            self.status_bar.config(text=status_text)
+            self.tooltip.set_text(status_text)
+            
+        except Exception as e:
+            messagebox.showerror("Permission Error", f"Could not change file permissions:\n{e}")
+            # Revert the checkbox state
+            self.readonly_var.set(not self.readonly_var.get())
+
     def save_file(self):
         if self.current_file:  # If a file is already opened
             try:
+                # Check if file is readonly
+                if self.readonly_var.get():
+                    self.save_as()
+                    return
+                
                 with open(self.current_file, 'w', encoding='utf-8') as file:
                     file.write(self.text_area.get(1.0, tk.END).rstrip('\n') + '\n')
                     timestamp = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
                     status_text = f"Status: Saved to {self.current_file} at {timestamp}"
                     self.status_bar.config(text=status_text)
                     self.tooltip.set_text(status_text)
-                    filename = os.path.basename(self.current_file)
-                    self.root.title(f"Notething - {filename}")
+                    self._update_title()
             except Exception as e:
                 messagebox.showerror("Error Saving File", f"Could not save file:\n{e}")
         else:  # If no file is opened, prompt to save as
-            # Get suggested filename
-            suggested_name = self._get_suggested_filename()
-            initial_file = f"{suggested_name}.txt" if suggested_name else None
-            
-            file_path = filedialog.asksaveasfilename(
-                defaultextension=".txt",
-                filetypes=[
-                    ("Text files", "*.txt"),
-                    ("Markdown files", "*.md"),
-                    ("All files", "*.*")
-                ],
-                initialfile=initial_file,
-                parent=self.root
-            )
-            
-            if file_path:  # Check if the user didn't cancel
-                try:
-                    with open(file_path, 'w', encoding='utf-8') as file:
-                        file.write(self.text_area.get(1.0, tk.END).rstrip('\n') + '\n')
-                        self.current_file = file_path
-                        timestamp = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
-                        status_text = f"Status: Saved to {self.current_file} at {timestamp}"
-                        self.status_bar.config(text=status_text)
-                        self.tooltip.set_text(status_text)
-                        filename = os.path.basename(self.current_file)
-                        self.root.title(f"Notething - {filename}")
-                except Exception as e:
-                    messagebox.showerror("Error Saving File", f"Could not save file:\n{e}")
+            self.save_as()
+
+    def save_as(self):
+        # Get suggested filename
+        suggested_name = self._get_suggested_filename()
+        initial_file = f"{suggested_name}.txt" if suggested_name else None
+        
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[
+                ("Text files", "*.txt"),
+                ("Markdown files", "*.md"),
+                ("All files", "*.*")
+            ],
+            initialfile=initial_file,
+            parent=self.root
+        )
+        
+        if file_path:
+            self.current_file = file_path
+            try:
+                with open(self.current_file, 'w', encoding='utf-8') as file:
+                    file.write(self.text_area.get(1.0, tk.END).rstrip('\n') + '\n')
+                # Set file to writable after Save As
+                import os
+                os.chmod(self.current_file, 0o666)
+                self.readonly_var.set(False)
+                self._update_title()
+                timestamp = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
+                status_text = f"Status: Saved to {self.current_file} at {timestamp}"
+                self.status_bar.config(text=status_text)
+                self.tooltip.set_text(status_text)
+            except Exception as e:
+                messagebox.showerror("Error Saving File", f"Could not save file:\n{e}")
 
     def handle_drop(self, event):
         """Handles files dropped onto the text area, supporting spaces in filenames."""
@@ -1872,6 +1932,7 @@ class Notepad:
                 f.write(f"auto_capitalize_indented={int(Notepad.auto_capitalize_indented)}\n")
                 f.write(f"highlight_enabled={int(Notepad.highlight_enabled)}\n")
                 f.write(f"auto_full_stop={int(Notepad.auto_full_stop)}\n")
+                f.write(f"readonly_mode={int(Notepad.readonly_mode)}\n")
                 f.write(f"default_find_text={Notepad.default_find_text}\n")
                 f.write(f"default_replace_text={Notepad.default_replace_text}\n")
                 
@@ -1907,6 +1968,8 @@ class Notepad:
                                 Notepad.highlight_enabled = bool(int(value))
                             elif key == "auto_full_stop":
                                 Notepad.auto_full_stop = bool(int(value))
+                            elif key == "readonly_mode":
+                                Notepad.readonly_mode = bool(int(value))
                             elif key == "default_find_text":
                                 Notepad.default_find_text = value
                             elif key == "default_replace_text":
@@ -2159,6 +2222,21 @@ class Notepad:
             # No selection, remove all highlight_selected tags
             self.text_area.tag_remove("highlight_selected", "1.0", tk.END)
 
+    def _set_file_permissions(self, filepath, readonly):
+        """Set file permissions to readonly or writable."""
+        try:
+            if os.path.exists(filepath):
+                if readonly:
+                    # Set readonly permissions
+                    os.chmod(filepath, 0o444)  # Read-only for all users
+                else:
+                    # Set writable permissions
+                    os.chmod(filepath, 0o666)  # Read-write for all users
+                return True
+        except Exception as e:
+            messagebox.showerror("Permission Error", f"Could not change file permissions:\n{e}")
+        return False
+
 # Add this after the other dialog classes
 class SettingsDialog(tk.Toplevel, CenterDialogMixin):
     def __init__(self, master, notepad):
@@ -2177,6 +2255,7 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         self.auto_capitalize_indented_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_indented))
         self.highlight_enabled_var = tk.BooleanVar(self, value=bool(Notepad.highlight_enabled))
         self.auto_full_stop_var = tk.BooleanVar(self, value=bool(Notepad.auto_full_stop))
+        self.readonly_mode_var = tk.BooleanVar(self, value=bool(Notepad.readonly_mode))
         self.default_find_text_var = tk.StringVar(self, value=Notepad.default_find_text)
         self.default_replace_text_var = tk.StringVar(self, value=Notepad.default_replace_text)
 
@@ -2307,6 +2386,13 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
             command=lambda: self._update_checkbox_state(self.auto_full_stop_var)
         )
         auto_full_stop_check.pack(anchor='w', pady=(0, 2))
+        readonly_mode_check = ttk.Checkbutton(
+            text_format_frame,
+            text="Read-only mode (requires Save As for readonly files)",
+            variable=self.readonly_mode_var,
+            command=lambda: self._update_checkbox_state(self.readonly_mode_var)
+        )
+        readonly_mode_check.pack(anchor='w', pady=(0, 2))
 
         # Highlighting Settings
         highlight_frame = ttk.LabelFrame(main_frame, text="Highlighting", padding="8")
@@ -2353,6 +2439,7 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         Notepad.auto_capitalize_indented = bool(self.auto_capitalize_indented_var.get())
         Notepad.highlight_enabled = bool(self.highlight_enabled_var.get())
         Notepad.auto_full_stop = bool(self.auto_full_stop_var.get())
+        Notepad.readonly_mode = bool(self.readonly_mode_var.get())
         Notepad.default_find_text = self.default_find_text_var.get()
         Notepad.default_replace_text = self.default_replace_text_var.get()
         self.notepad._save_settings()
