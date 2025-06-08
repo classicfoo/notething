@@ -1535,7 +1535,8 @@ class Notepad:
         if getattr(Notepad, 'auto_full_stop', False):
             if current_line_content.strip():
                 stripped = current_line_content.rstrip()
-                if not stripped.endswith(('.', '!', '?')):
+                # Skip adding full stop if line starts with # (markdown heading)
+                if not stripped.startswith('#') and not stripped.endswith(('.', '!', '?')):
                     self.text_area.delete(current_line_start_idx, current_line_end_idx)
                     self.text_area.insert(current_line_start_idx, stripped + '.')
                     # Update current_line_content and adjust cursor
