@@ -1,9 +1,110 @@
+# Notething
+
+A simple text editor built with Python and Tkinter.
+
+## Project Structure
+
+```
+Notething/
+├── core/                  # Core components
+│   ├── settings.py       # Settings dialog
+│   ├── find_replace.py   # Find and replace functionality
+│   ├── calendar_dialog.py # Calendar dialog
+│   ├── tooltip.py        # Tooltip implementation
+│   └── center_dialog.py  # Dialog centering functionality
+│
+├── utils/                # Utility functions
+│   ├── config.py        # Configuration management
+│   ├── date_utils.py    # Date and time utilities
+│   ├── file_utils.py    # File operations
+│   └── text_utils.py    # Text manipulation utilities
+│
+├── features/            # Feature implementations
+│   ├── highlight.py     # Text highlighting
+│   ├── url_handler.py   # URL detection and handling
+│   └── text_formatting.py # Text formatting features
+│
+├── ui/                  # User interface components
+│   ├── menu.py         # Menu bar implementation
+│   ├── status_bar.py   # Status bar implementation
+│   └── notepad.py      # Main application window
+│
+├── main.py             # Application entry point
+├── requirements.txt    # Python dependencies
+└── README.md          # This file
+```
+
+## Features
+
+- Basic text editing (cut, copy, paste, undo, redo)
+- File operations (new, open, save, save as)
+- Find and replace functionality
+- Word wrap toggle
+- Font customization
+- Status bar with line and column information
+- Drag and drop file support
+- URL detection and handling
+- Text highlighting
+- Date and time insertion
+- Calendar integration
+
+## Requirements
+
+- Python 3.6 or higher
+- tkinter (usually comes with Python)
+- tkinterdnd2 (for drag and drop support)
+- tkcalendar (for calendar functionality)
+
+## Installation
+
+1. Clone the repository:
+```bash
+Git clone https://github.com/yourusername/notething.git
+Cd notething
+```
+
+2. Install the required packages:
+```bash
+Pip install -r requirements.txt
+```
+
+## Usage
+
+Run the application:
+```bash
+Python main.py
+```
+
+## Keyboard Shortcuts
+
+- Ctrl+N: New file
+- Ctrl+O: Open file
+- Ctrl+S: Save file
+- Ctrl+Shift+S: Save file as
+- Ctrl+Z: Undo
+- Ctrl+Y: Redo
+- Ctrl+X: Cut
+- Ctrl+C: Copy
+- Ctrl+V: Paste
+- Ctrl+F: Find
+- Ctrl+H: Replace
+- Ctrl+A: Select all
+- F5: Insert date and time
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
 # Readme
 
 ## Test Area
 
 M Asdfasf 
-	M Testing
+	M Testing.
 	M This is a nested bullet 06 May 2025.
 	M This is a nested bullet 08 Jun 2025.	
 	
@@ -24,6 +125,29 @@ T This is a bullet.
 T Asdfasf
 
 T Asdfasfa.
+
+# Aim To Get This Broken Down More
+
+Notething/
+├── src/
+│   ├── __init__.py
+│   ├── ui/
+│   │   ├── __init__.py
+│   │   ├── dialogs.py        # CalendarDialog, FindReplaceDialog, SettingsDialog
+│   │   ├── tooltip.py        # Tooltip class
+│   │   └── mixins.py         # CenterDialogMixin
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── notepad.py        # Main Notepad class
+│   │   ├── highlighting.py   # HighlightingManager (already separated)
+│   │   ├── file_manager.py   # File operations
+│   │   ├── text_editor.py    # Text editing features
+│   │   └── settings.py       # Settings management
+│   └── utils/
+│       ├── __init__.py
+│       └── helpers.py        # Utility functions
+├── main.py                   # Entry point
+└── requirements.txt
 
 
 ## Features.
@@ -107,13 +231,13 @@ T After accidently captialising every word on a line, can't undo.
 
 ## Preserving Visual Context With Custom Tags In Tkinter's Find/replace Dialog
 
-In Tkinter, when a dialog like Find/Replace is opened, it takes focus away from the main text widget. This triggers a default behaviour where the Text widget clears its selection highlighting, making it difficult for users to see what they had selected—a serious usability issue when performing actions like "Find in selection." To address this, we first disabled the automatic selection-clearing behaviour during widget initialisation. However, this alone wasn’t enough. We introduced custom tags to visually preserve and manage the user's selection while the dialog was open.
+In Tkinter, when a dialog like Find/Replace is opened, it takes focus away from the main text widget. This triggers a default behaviour where the Text widget clears its selection highlighting, making it difficult for users to see what they had selected—a serious usability issue when performing actions like "Find in selection." To address this, we first disabled the automatic selection-clearing behaviour during widget initialisation. However, this alone wasn't enough. We introduced custom tags to visually preserve and manage the user's selection while the dialog was open.
 
-These custom tags served multiple purposes: they maintained visual feedback for users, clearly marked search boundaries, and supported layered visual states—such as showing both selected regions and search highlights simultaneously. Without proper cleanup, though, these tags could linger after the dialog closed, leading to confusing visual artifacts like leftover highlights or stacked tag effects. By carefully cleaning up tags when the dialog is dismissed, we preserved the clarity and usability of the editor. This solution highlights how working around Tkinter’s limitations with custom tags enables a cleaner, more intuitive user experience.
+These custom tags served multiple purposes: they maintained visual feedback for users, clearly marked search boundaries, and supported layered visual states—such as showing both selected regions and search highlights simultaneously. Without proper cleanup, though, these tags could linger after the dialog closed, leading to confusing visual artifacts like leftover highlights or stacked tag effects. By carefully cleaning up tags when the dialog is dismissed, we preserved the clarity and usability of the editor. This solution highlights how working around Tkinter's limitations with custom tags enables a cleaner, more intuitive user experience.
 
 ## Uncovering Hidden Behaviours: Debugging Ctrl+h In Tkinter's Text Widget
 
-The bug report initially pointed to an issue where using "Find and Replace in selection" deleted existing newlines, but deeper investigation revealed a broader problem: pressing Ctrl+H deleted characters even before the replace dialog appeared. This behaviour was traced to a default binding in Tkinter’s Text widget, where Ctrl+H historically acts as a backspace. As a result, when Ctrl+H was pressed, the widget’s default backspace action occurred before the application's own binding opened the replace dialog, leading to unexpected deletions.
+The bug report initially pointed to an issue where using "Find and Replace in selection" deleted existing newlines, but deeper investigation revealed a broader problem: pressing Ctrl+H deleted characters even before the replace dialog appeared. This behaviour was traced to a default binding in Tkinter's Text widget, where Ctrl+H historically acts as a backspace. As a result, when Ctrl+H was pressed, the widget's default backspace action occurred before the application's own binding opened the replace dialog, leading to unexpected deletions.
 
 The fix involved binding Ctrl+H directly to the Text widget and returning "break" to prevent the default backspace behaviour from executing. This ensured that only the desired action—the dialog opening—occurred. The key takeaway is that bug reports may highlight a specific symptom of a more general issue, and effective debugging often requires understanding default widget behaviours and event-handling order within the GUI framework.
 

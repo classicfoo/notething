@@ -14,527 +14,13 @@ import time # <-- Import time module
 import re
 import webbrowser # <-- Import webbrowser for opening URLs
 import subprocess # <-- Import subprocess for opening files
-
-# Add this class before the other dialog classes
-class CenterDialogMixin:
-    """Mixin class to center dialogs on screen."""
-    def center_dialog(self):
-        """Centers the dialog on screen."""
-        # Hide the window initially until we position it correctly
-        self.withdraw()
-        
-        # Update window size calculations
-        self.update_idletasks()
-        
-        # Get window and screen dimensions
-        window_width = self.winfo_reqwidth()
-        window_height = self.winfo_reqheight()
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        
-        # Calculate position
-        x = (screen_width - window_width) // 2
-        y = (screen_height - window_height) // 2
-        
-        # Set position and show window
-        self.geometry(f"{window_width}x{window_height}+{x}+{y}")
-        self.deiconify()
-
-# --- Calendar Dialog Class (using tkcalendar) ---
-class CalendarDialog(tk.Toplevel, CenterDialogMixin):
-    def __init__(self, master):
-        super().__init__(master)
-        
-        self.transient(master)
-        self.title("Select Date")
-        self.result_date = None
-
-        # Get current date for initial display
-        now = datetime.now()
-
-        main_frame = ttk.Frame(self, padding="10")
-        main_frame.pack(expand=True, fill=tk.BOTH)
-
-        # Create the Calendar widget
-        self.cal = Calendar(main_frame,
-                            selectmode='day',
-                            year=now.year,
-                            month=now.month,
-                            day=now.day,
-                            date_pattern='dd/mm/yyyy')
-        self.cal.pack(pady=10, padx=10, fill="both", expand=True)
-
-        # Buttons frame
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(pady=(5,0), fill=tk.X)
-        button_frame.columnconfigure(0, weight=1)
-        button_frame.columnconfigure(1, weight=1)
-
-        ok_button = ttk.Button(button_frame, text="OK", command=self._on_ok, width=12)
-        ok_button.pack(side=tk.LEFT, padx=(0,5), expand=True, fill=tk.X)
-
-        cancel_button = ttk.Button(button_frame, text="Cancel", command=self._on_cancel, width=12)
-        cancel_button.pack(side=tk.RIGHT, padx=(5,0), expand=True, fill=tk.X)
-
-        self.resizable(False, False)
-        self.bind("<Escape>", lambda e: self._on_cancel())
-        self.bind("<Return>", lambda e: self._on_ok())
-        self.cal.bind("<Return>", lambda e: self._on_ok())
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-        
-        # Center the dialog
-        self.center_dialog()
-        
-        self.grab_set()
-        self.focus_set()
-        self.cal.focus_set()
-
-        # Arrow key navigation for calendar (robust date handling, no debug)
-        def move_selection(days):
-            cur = self.cal.selection_get()
-            import datetime
-            if cur:
-                try:
-                    # Ensure cur is a datetime.date
-                    if isinstance(cur, datetime.datetime):
-                        cur = cur.date()
-                    elif not isinstance(cur, datetime.date):
-                        cur = datetime.datetime.strptime(str(cur), "%Y-%m-%d").date()
-                    new_date = cur + datetime.timedelta(days=days)
-                    self.cal.selection_clear()
-                    self.cal.selection_set(new_date)
-                    self.cal.see(new_date)
-                except Exception:
-                    pass
-        self.cal.bind('<Left>', lambda e: move_selection(-1))
-        self.cal.bind('<Right>', lambda e: move_selection(1))
-        self.cal.bind('<Up>', lambda e: move_selection(-7))
-        self.cal.bind('<Down>', lambda e: move_selection(7))
-        self.cal.focus_set()
-
-        # Unbind on close
-        def unbind_arrows():
-            self.unbind_all('<Left>')
-            self.unbind_all('<Right>')
-            self.unbind_all('<Up>')
-            self.unbind_all('<Down>')
-        self.protocol("WM_DELETE_WINDOW", lambda: (unbind_arrows(), self._on_cancel()))
-        self.bind("<Escape>", lambda e: (unbind_arrows(), self._on_cancel()))
-        self.bind("<Return>", lambda e: (unbind_arrows(), self._on_ok()))
-        # Also unbind in _on_ok and _on_cancel
-        old_on_ok = self._on_ok
-        def new_on_ok(*args, **kwargs):
-            unbind_arrows()
-            return old_on_ok(*args, **kwargs)
-        self._on_ok = new_on_ok
-        old_on_cancel = self._on_cancel
-        def new_on_cancel(*args, **kwargs):
-            unbind_arrows()
-            return old_on_cancel(*args, **kwargs)
-        self._on_cancel = new_on_cancel
-
-    def _on_ok(self):
-        self.result_date = self.cal.selection_get() # Returns a datetime.date object
-        self.destroy()
-
-    def _on_cancel(self):
-        self.result_date = None
-        self.destroy()
-# --- End Calendar Dialog Class ---
-
-# --- Find/Replace Dialog Class ---
-class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
-    def __init__(self, master, text_widget, replace_mode=False):
-        # Store references before creating the dialog
-        self.text_widget = text_widget
-        self.master = master
-        
-        # Create the dialog
-        super().__init__(master)
-        
-        # Configure dialog
-        self.title("Find" if not replace_mode else "Find and Replace")
-        self.transient(master)
-        self.resizable(False, False)
-
-        # Initialize variables with explicit parent
-        self.find_what_var = tk.StringVar(self)
-        self.replace_with_var = tk.StringVar(self)
-        self.match_case_var = tk.BooleanVar(self, value=False)  # Initialize with False
-        self.find_in_selection_var = tk.BooleanVar(self, value=False)  # Initialize with False
-
-        # Store the current selection before creating the Toplevel
-        try:
-            self.initial_sel_start = self.text_widget.index(tk.SEL_FIRST)
-            self.initial_sel_end = self.text_widget.index(tk.SEL_LAST)
-            has_selection = True
-        except tk.TclError:
-            self.initial_sel_start = None
-            self.initial_sel_end = None
-            has_selection = False
-
-        # Create a super unique tag name for preserving selection
-        self.preserved_sel_tag = f"preserved_selection_{id(self)}_{time.time()}"
-        
-        # Apply the preserved selection tag
-        if has_selection:
-            self.text_widget.tag_configure(self.preserved_sel_tag, 
-                                          background="lightgrey", 
-                                          foreground="black")
-            self.text_widget.tag_add(self.preserved_sel_tag, 
-                                    self.initial_sel_start, 
-                                    self.initial_sel_end)
-
-        # --- UI Elements ---
-        # Frame for entries
-        entry_frame = ttk.Frame(self, padding="10")
-        entry_frame.pack(fill=tk.X)
-
-        ttk.Label(entry_frame, text="Find what:").grid(row=0, column=0, sticky='w', padx=5, pady=2)
-        self.find_entry = ttk.Entry(entry_frame, textvariable=self.find_what_var, width=30)
-        self.find_entry.grid(row=0, column=1, sticky='ew', padx=5, pady=2)
-
-        if replace_mode:
-            ttk.Label(entry_frame, text="Replace with:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
-            self.replace_entry = ttk.Entry(entry_frame, textvariable=self.replace_with_var, width=30)
-            self.replace_entry.grid(row=1, column=1, sticky='ew', padx=5, pady=2)
-            
-            # Add Swap button
-            self.swap_btn = ttk.Button(entry_frame, text="⇅", width=3, command=self._swap_fields)
-            self.swap_btn.grid(row=0, column=2, rowspan=2, padx=(5,0), pady=2, sticky='ns')
-            # Add Return key binding for swap button
-            self.swap_btn.bind("<Return>", lambda e: self._swap_fields())
-            
-            # Configure tooltip for swap button
-            self.swap_tooltip = Tooltip(self.swap_btn)
-            self.swap_tooltip.set_text("Swap Find/Replace text")
-
-        entry_frame.columnconfigure(1, weight=1) # Make entry expand
-
-        # Frame for options and buttons
-        bottom_frame = ttk.Frame(self, padding="5 10")
-        bottom_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Options (Checkboxes) - using a sub-frame for alignment
-        options_frame = ttk.Frame(bottom_frame)
-        options_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
-        self.match_case_check = ttk.Checkbutton(options_frame, text="Match case", variable=self.match_case_var)
-        self.match_case_check.pack(anchor='w')
-        self.find_in_selection_check = ttk.Checkbutton(options_frame, text="Find in selection", variable=self.find_in_selection_var)
-        self.find_in_selection_check.pack(anchor='w')
-        # Add "Wrap around" later if needed
-
-        # Buttons - using a sub-frame for alignment
-        button_frame = ttk.Frame(bottom_frame)
-        button_frame.pack(side=tk.RIGHT, fill=tk.Y)
-
-        self.find_next_btn = ttk.Button(button_frame, text="Find Next", command=self.find_next)
-        self.find_next_btn.pack(side=tk.LEFT, padx=2, pady=2)
-
-        if replace_mode:
-            self.replace_btn = ttk.Button(button_frame, text="Replace", command=self.replace)
-            self.replace_btn.pack(side=tk.LEFT, padx=2, pady=2)
-            self.replace_all_btn = ttk.Button(button_frame, text="Replace All", command=self.replace_all)
-            self.replace_all_btn.pack(side=tk.LEFT, padx=2, pady=2)
-            # Add binding for Return key when Replace All button has focus
-            self.replace_all_btn.bind("<Return>", lambda e: self.replace_all())
-
-        # --- Initial Focus and Bindings ---
-        self.find_entry.focus_set() # Start cursor in "Find what"
-        self.protocol("WM_DELETE_WINDOW", self._cleanup_custom_tags_and_destroy) # Handle closing via 'X' button
-
-        # Bind Enter key in find entry to Find Next
-        self.find_entry.bind("<Return>", lambda event: self.find_next())
-        if replace_mode:
-            self.replace_entry.bind("<Return>", lambda event: self.replace_all())
-            # Set focus to Replace All button after a brief delay
-            self.after(100, lambda: self.replace_all_btn.focus_set())
-
-        # --- Bind Escape key to close the dialog ---
-        self.bind("<Escape>", lambda event: self._cleanup_custom_tags_and_destroy())
-        # --- End Escape Binding ---
-
-        # Store last search position
-        self.last_pos = "1.0"
-
-        # Set "Find in selection" checkbox if there's a preserved selection
-        if has_selection:
-            self.find_in_selection_var.set(True)
-        
-        # Center the dialog
-        self.center_dialog()
-        
-        # Set focus and make modal
-        self.grab_set()
-        self.focus_set()
-        self.find_entry.focus_set()
-
-    def _cleanup_custom_tags_and_destroy(self, event=None):
-        """Clean up tags and then destroy the dialog"""
-        self._cleanup_custom_tags()
-        self.destroy()
-
-    def _cleanup_custom_tags(self, event=None):
-        """Remove custom tags when the dialog is destroyed"""
-        try:
-            # Clear ALL selections and custom tags
-            self.text_widget.tag_remove(tk.SEL, "1.0", tk.END)
-            self.text_widget.tag_remove(self.preserved_sel_tag, "1.0", tk.END)
-            self.text_widget.tag_remove("search_highlight", "1.0", tk.END)
-            
-            # Delete the custom tag completely
-            self.text_widget.tag_delete(self.preserved_sel_tag)
-            
-        except tk.TclError:
-            pass  # Widget might already be gone
-
-    def find_next(self):
-        find_term = self.find_what_var.get()
-        if not find_term:
-            messagebox.showwarning("Find", "Please enter text to find.", parent=self)
-            return
-
-        # Remove previous highlight
-        self.text_widget.tag_remove("search_highlight", "1.0", tk.END)
-
-        # Get search boundaries
-        if self.find_in_selection_var.get():
-            if self.initial_sel_start and self.initial_sel_end:
-                # When searching in selection, use the boundaries from our preserved selection
-                start_pos = self.text_widget.index(tk.INSERT)
-                stop_index = self.initial_sel_end
-
-                # If cursor is outside selection, move it to the beginning of the selection
-                if (self.text_widget.compare(start_pos, "<", self.initial_sel_start) or
-                    self.text_widget.compare(start_pos, ">", self.initial_sel_end)):
-                    start_pos = self.initial_sel_start
-            else:
-                messagebox.showwarning("Find", "No text selected.", parent=self)
-                return
-        else:
-            start_pos = self.text_widget.index(tk.INSERT)
-            stop_index = tk.END
-
-        # Perform the search
-        nocase = not self.match_case_var.get()
-        found_pos = self.text_widget.search(find_term, start_pos, stopindex=stop_index, nocase=nocase)
-
-        if found_pos:
-            # Found a match in the current direction
-            end_pos = f"{found_pos}+{len(find_term)}c"
-            
-            # Apply search highlight
-            self.text_widget.tag_add("search_highlight", found_pos, end_pos)
-            
-            # Ensure search highlight is on top ONLY if we have a preserved selection
-            if self.initial_sel_start and self.initial_sel_end:
-                try:
-                    self.text_widget.tag_raise("search_highlight", self.preserved_sel_tag)
-                except tk.TclError:
-                    # In case the tag was removed or isn't defined
-                    pass
-            
-            # Make sure the found text is visible
-            self.text_widget.see(found_pos)
-            
-            # Move cursor to end of found text for next search
-            self.text_widget.mark_set(tk.INSERT, end_pos)
-            
-            # Bring dialog back to front
-            self.lift()
-        else:
-            # No match found in the current direction, offer to wrap around
-            if self.find_in_selection_var.get():
-                # For search in selection, wrap from selection start
-                wrap_start = self.initial_sel_start
-                wrap_message = "Reached the end of the selection. Continue from the beginning of the selection?"
-            else:
-                # For normal search, wrap from document start
-                wrap_start = "1.0"
-                wrap_message = "Reached the end of the document. Continue from the beginning?"
-            
-            if messagebox.askyesno("Find", wrap_message, parent=self):
-                # Try searching from the beginning
-                found_pos = self.text_widget.search(find_term, wrap_start, stopindex=start_pos, nocase=nocase)
-                if found_pos:
-                    end_pos = f"{found_pos}+{len(find_term)}c"
-                    self.text_widget.tag_add("search_highlight", found_pos, end_pos)
-                    
-                    # Only try to raise tag if we have a preserved selection
-                    if self.initial_sel_start and self.initial_sel_end:
-                        try:
-                            self.text_widget.tag_raise("search_highlight", self.preserved_sel_tag)
-                        except tk.TclError:
-                            pass
-                        
-                    self.text_widget.see(found_pos)
-                    self.text_widget.mark_set(tk.INSERT, end_pos)
-                    self.lift()
-                else:
-                    messagebox.showinfo("Find", f"Cannot find '{find_term}'", parent=self)
-            else:
-                # User chose not to wrap around, so do nothing
-                pass
-
-    def replace(self):
-        # --- Refined Replace logic ---
-        find_term = self.find_what_var.get()
-        replace_term = self.replace_with_var.get()
-        nocase = not self.match_case_var.get()
-
-        # Check if the currently highlighted search result matches the find term
-        highlight_range = self.text_widget.tag_ranges("search_highlight")
-        if highlight_range:
-            hl_start, hl_end = highlight_range
-            highlighted_text = self.text_widget.get(hl_start, hl_end)
-
-            # Compare highlighted text with find_term (respecting case option)
-            text_to_compare = highlighted_text if not nocase else highlighted_text.lower()
-            find_to_compare = find_term if not nocase else find_term.lower()
-
-            if text_to_compare == find_to_compare:
-                # Remove highlight *before* deleting
-                self.text_widget.tag_remove("search_highlight", hl_start, hl_end)
-                self.text_widget.delete(hl_start, hl_end)
-                self.text_widget.insert(hl_start, replace_term)
-                # Move cursor to end of replaced text - this becomes the start for the *next* find
-                self.text_widget.mark_set(tk.INSERT, f"{hl_start}+{len(replace_term)}c")
-                # DO NOT automatically find next here. Let the user click Find Next again.
-                return # Stop after successful replace
-
-        # If no highlight matches the find term,
-        # just find the next occurrence (as if Find Next was clicked).
-        self.find_next()
-        # --- End Refined Replace logic ---
-
-    def replace_all(self):
-        """Replace all occurrences of the find term with the replace term."""
-        find_term = self.find_what_var.get()
-        replace_term = self.replace_with_var.get()
-        
-        if not find_term:
-            messagebox.showwarning("Replace All", "Please enter text to find.", parent=self)
-            return
-        
-        # Determine search boundaries
-        if self.find_in_selection_var.get():
-            if self.initial_sel_start and self.initial_sel_end:
-                start_pos = self.initial_sel_start
-                stop_pos = self.initial_sel_end
-            else:
-                messagebox.showwarning("Replace All", "No text selected.", parent=self)
-                return
-        else:
-            start_pos = "1.0"
-            stop_pos = tk.END
-        
-        # Remove any existing highlight
-        self.text_widget.tag_remove("search_highlight", "1.0", tk.END)
-        
-        # Turn off auto separators to make it a single undo operation
-        original_autoseparators = self.text_widget.cget("autoseparators")
-        self.text_widget.config(autoseparators=False)
-        
-        count = 0
-        current_pos = start_pos
-        nocase = not self.match_case_var.get()
-        
-        try:
-            # Loop through and replace all occurrences
-            while True:
-                found_pos = self.text_widget.search(find_term, current_pos, stopindex=stop_pos, nocase=nocase)
-                if not found_pos:
-                    break
-                
-                # Calculate the end position of the found text
-                end_pos = f"{found_pos}+{len(find_term)}c"
-                
-                # Replace this occurrence
-                self.text_widget.delete(found_pos, end_pos)
-                self.text_widget.insert(found_pos, replace_term)
-                
-                # Update current position for next search
-                # Important: account for the different lengths of find and replace terms
-                current_pos = f"{found_pos}+{len(replace_term)}c"
-                
-                # Update stop position if we're searching in selection
-                # This is needed because the replacement might change text positions
-                if self.find_in_selection_var.get():
-                    # Adjust the end boundary by the difference in length between find and replace terms
-                    length_diff = len(replace_term) - len(find_term)
-                    if length_diff != 0:
-                        # Get current line and char position of stop_pos
-                        line, char = map(int, self.text_widget.index(stop_pos).split('.'))
-                        # Adjust the character position
-                        char += length_diff
-                        # Update stop_pos
-                        stop_pos = f"{line}.{char}"
-                
-                count += 1
-            
-            # Create a single undo entry for all replacements
-            if count > 0:
-                self.text_widget.edit_separator()
-                
-            # Show result message
-            if count > 0:
-                messagebox.showinfo("Replace All", f"Replaced {count} occurrence(s).", parent=self)
-                # Update line colors if needed
-                if hasattr(self.master, '_update_line_colors'):
-                    self.master._update_line_colors()
-            else:
-                messagebox.showinfo("Replace All", f"Cannot find '{find_term}'", parent=self)
-                
-        finally:
-            # Restore auto separators
-            self.text_widget.config(autoseparators=original_autoseparators)
-
-    def _swap_fields(self):
-        """Swap the contents of find and replace fields."""
-        find_text = self.find_what_var.get()
-        replace_text = self.replace_with_var.get()
-        
-        self.find_what_var.set(replace_text)
-        self.replace_with_var.set(find_text)
-        
-        # Set focus to find field after swap
-        self.find_entry.focus_set()
-
-# --- End Find/Replace Dialog Class ---
-
-class Tooltip:
-    """Create a tooltip for a given widget."""
-    def __init__(self, widget):
-        self.widget = widget
-        self.tooltip_window = None
-        self.text = ""
-
-        # Bind mouse events
-        self.widget.bind("<Enter>", self.show_tooltip)
-        self.widget.bind("<Leave>", self.hide_tooltip)
-
-    def show_tooltip(self, event=None):
-        if self.tooltip_window is not None:
-            return  # Tooltip is already shown
-
-        # Create a new tooltip window (tk.Toplevel is fine)
-        x = self.widget.winfo_rootx() + 20
-        y = self.widget.winfo_rooty() + 20
-        self.tooltip_window = tk.Toplevel(self.widget)
-        self.tooltip_window.wm_overrideredirect(True)  # Remove window decorations
-        self.tooltip_window.wm_geometry(f"+{x}+{y}")
-
-        # Use ttk.Label for the tooltip text
-        label = ttk.Label(self.tooltip_window, text=self.text, background="#F5F5DC", padding=(5, 2)) # Use padding instead of borderwidth/relief
-        label.pack()
-
-    def hide_tooltip(self, event=None):
-        if self.tooltip_window is not None:
-            self.tooltip_window.destroy()
-            self.tooltip_window = None
-
-    def set_text(self, text):
-        self.text = text
+from utils.highlighting import HighlightingManager
+from ui.mixins import CenterDialogMixin
+from ui.calendar_dialog import CalendarDialog
+from ui.find_replace_dialog import FindReplaceDialog
+from ui.tooltip import Tooltip
+from ui.settings_dialog import SettingsDialog
+from utils.line_formatting import LineFormatter
 
 class Notepad:
     # --- Class variables for window management and cascading ---
@@ -587,17 +73,6 @@ class Notepad:
         self.current_file = None
         self.readonly_var = tk.BooleanVar(value=False)  # Initialize readonly variable
         
-        # Create the text area
-        self.text_area = tk.Text(
-            self.root,
-            wrap=tk.WORD,
-            undo=True,
-            maxundo=-1,
-            autoseparators=True,
-            padx=10,
-            pady=10
-        )
-
         Notepad.open_window_count += 1
 
         # --- Window Positioning and Sizing ---
@@ -660,6 +135,14 @@ class Notepad:
             cursor="arrow"  # Change cursor to arrow by default
         )
 
+        
+        # Replace the highlight-related code with:
+        self.highlight_manager = HighlightingManager(self.text_area)
+
+        
+        self.line_formatter = LineFormatter(self.text_area, self)
+        self.line_formatter._update_line_formatting()
+
         # Configure scrollbar to control text area
         self.scrollbar.config(command=self.text_area.yview)
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -671,25 +154,18 @@ class Notepad:
         self.text_area.tag_bind("hyperlink", "<Leave>", lambda e: self.text_area.config(cursor="arrow"))
         self.text_area.bind("<Button-1>", self._handle_click)
 
-        # Combined formatting handler
-        def _update_all_formatting(event=None):
-            self._update_line_formatting()
-            self._detect_urls()
-        self._update_all_formatting = _update_all_formatting
-
         # Bind the combined handler to all relevant events
-        self.text_area.bind("<KeyRelease>", self._update_all_formatting)
-        self.text_area.bind("<<Paste>>", lambda e: self.root.after(1, self._update_all_formatting))
-        self.text_area.bind("<Control-v>", lambda e: self.root.after(1, self._update_all_formatting))
-        self.text_area.bind("<FocusOut>", lambda e: self._update_all_formatting())
-        self.text_area.bind("<space>", lambda e: self._update_all_formatting())
-        self.text_area.bind("<Return>", lambda e: self._update_all_formatting())
+        self.text_area.bind("<KeyRelease>", self.line_formatter._update_line_formatting_event)
+        self.text_area.bind("<<Paste>>", lambda e: self.root.after(1, self.line_formatter._update_line_formatting()))
+        self.text_area.bind("<Control-v>", lambda e: self.root.after(1, self.line_formatter._update_line_formatting()))
+        self.text_area.bind("<FocusOut>", lambda e: self.line_formatter._update_line_formatting())
+        self.text_area.bind("<space>", lambda e: self.line_formatter._update_line_formatting())
+        self.text_area.bind("<Return>", lambda e: self.line_formatter._update_line_formatting())
+        
 
         # Remove any old separate bindings for _detect_urls and _update_line_formatting_event
         # (Assume they are not rebound elsewhere)
 
-        # Initial formatting
-        self._update_all_formatting()
 
         # --- Configure Line Color Tags ---
         self.text_area.tag_configure("green_line", foreground="green")
@@ -722,6 +198,8 @@ class Notepad:
         self.last_match_case = False
         # --- End Find/Replace State ---
 
+        self.highlight_manager = HighlightingManager(self.text_area)
+
         self.create_menu()
         self._setup_key_bindings()
         self.bind_hotkeys()
@@ -730,7 +208,7 @@ class Notepad:
         self.text_area.bind("<Control-BackSpace>", self.delete_previous_word)
 
         # --- Bind KeyRelease for Line Coloring ---
-        self.text_area.bind("<KeyRelease>", self._update_line_formatting_event) # Use _event suffix for direct bindings
+        self.text_area.bind("<KeyRelease>", self.line_formatter._update_line_formatting_event) # Use _event suffix for direct bindings
         # --- End KeyRelease Binding ---
 
         # --- Bind Tab and Shift-Tab for Indentation ---
@@ -764,29 +242,20 @@ class Notepad:
                 self._load_file(Notepad.recent_files[0])
             else:
                 # Ensure initial coloring is applied even for an empty new file
-                self._update_line_formatting()
+                self.line_formatter._update_line_formatting()
                 self.root.title("Notething - Untitled")
         else:
             # This is a subsequent window - always start blank
-            self._update_line_formatting()
+            self.line_formatter._update_line_formatting()
             self.root.title("Notething - Untitled")
 
         # Bind the window close button (X)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close_window)
 
-        # Add after other tag configurations in __init__ method, where other tags are configured
-        self.text_area.tag_configure("highlight", background="yellow")
-        self.text_area.tag_configure("highlight_selected", background="#E9E969")  # Grey-yellow for overlap
-        self.text_area.tag_configure(tk.SEL, background="lightgrey", foreground="black")  # Explicitly set selection colors
+        
+        
 
-        # Set tag priorities (lower ones show through)
-        self.text_area.tag_lower("highlight")  # Bottom layer
-        self.text_area.tag_raise("highlight_selected", "highlight")  # Middle layer
-        self.text_area.tag_raise(tk.SEL, "highlight")  # Top layer, but configured to show highlight_selected
 
-        # Add these bindings in __init__ after other bindings
-        self.text_area.bind('<<Selection>>', self._update_highlight_selection)
-        self.text_area.bind('<ButtonRelease-1>', self._update_highlight_selection)
 
     def create_menu(self):
         """Create the application menu."""
@@ -835,8 +304,10 @@ class Notepad:
         
         # Edit menu
         self.root.bind("<Control-f>", lambda e: self.open_find_dialog())
-        # Remove the Ctrl+H binding from here since it's handled in _setup_key_bindings
+        
+        self.text_area.bind("<Control-Shift-H>", self.highlight_manager.handle_highlight)
 
+                
     def delete_previous_word(self, event):
         # Get the current cursor position
         cursor_index = self.text_area.index(tk.INSERT)
@@ -873,7 +344,7 @@ class Notepad:
         self.status_bar.config(text="Status: New file")
         self.tooltip.set_text("Status: New file")
         # Apply line formatting/colors
-        self._update_line_formatting()
+        self.line_formatter._update_line_formatting()
 
     def _load_file(self, filepath):
         """Load a file into the text area."""
@@ -897,7 +368,7 @@ class Notepad:
             self.status_bar.config(text=status_text)
             self.tooltip.set_text(status_text)
             # Apply line formatting/colors
-            self._update_line_formatting()
+            self.line_formatter._update_line_formatting()
         except Exception as e:
             messagebox.showerror("Error Opening File", f"Could not open file:\n{e}")
 
@@ -973,7 +444,7 @@ class Notepad:
             # Ensure main window gets focus back
             self.root.focus_force()
             self.text_area.focus_set()
-            self._update_line_formatting()
+            self.line_formatter._update_line_formatting()
             self._add_to_recent_files(filepath)
             self._detect_urls()  # Ensure hyperlinks are detected after loading
 
@@ -1141,128 +612,7 @@ class Notepad:
                 return prefix + capitalized_content
                 
         return line
-
-    def _update_line_formatting(self, event=None):
-        """Update the formatting of all lines in the text area."""
-        if not Notepad.line_formatting_enabled:
-            # Remove all formatting when disabled
-            self.text_area.tag_remove("green_line", "1.0", tk.END)
-            self.text_area.tag_remove("blue_line", "1.0", tk.END)
-            self.text_area.tag_remove("grey_line", "1.0", tk.END)
-            self.text_area.tag_remove("maroon_line", "1.0", tk.END)
-            self.text_area.tag_remove("bold_line", "1.0", tk.END)
-            self.text_area.tag_remove("normal_line", "1.0", tk.END)
-            return
-
-        # Store current cursor position and selection
-        current_cursor = self.text_area.index(tk.INSERT)
-        try:
-            selection_start = self.text_area.index(tk.SEL_FIRST)
-            selection_end = self.text_area.index(tk.SEL_LAST)
-            has_selection = True
-        except tk.TclError:
-            has_selection = False
-
-        # Remove existing tags first to reset colors
-        self.text_area.tag_remove("green_line", "1.0", tk.END)
-        self.text_area.tag_remove("blue_line", "1.0", tk.END)
-        self.text_area.tag_remove("grey_line", "1.0", tk.END)
-        self.text_area.tag_remove("maroon_line", "1.0", tk.END)
-        self.text_area.tag_remove("bold_line", "1.0", tk.END)
-        self.text_area.tag_remove("normal_line", "1.0", tk.END)
-
-        # Process all lines
-        content = self.text_area.get("1.0", tk.END)
-        lines = content.split('\n')
-        modified = False
-        
-        for i, line in enumerate(lines):
-            # Get line number (1-based)
-            line_num = i + 1
-            line_start = f"{line_num}.0"
-            line_end = f"{line_num}.end"
-            
-            # Get stripped line for prefix checking
-            stripped_line = line.lstrip()
-            
-            # Format the line
-            formatted_line = line
-            
-            # Auto-capitalize first word if enabled
-            if Notepad.auto_capitalize_first_word:
-                formatted_line = self._capitalize_first_word(formatted_line)
-                
-            # Format headings if enabled
-            if stripped_line.startswith('#') and Notepad.auto_capitalize_headings:
-                formatted_line = self._format_heading_line(formatted_line)
-                
-            # Apply formatting if line changed
-            if formatted_line != line:
-                modified = True
-                self.text_area.delete(line_start, line_end)
-                self.text_area.insert(line_start, formatted_line)
-                
-            # Apply bold tag for headings
-            if stripped_line.startswith('#'):
-                self.text_area.tag_add("bold_line", line_start, line_end)
-                
-            # Apply color formatting based on line prefix
-            if stripped_line.startswith('T '):
-                self.text_area.tag_add("blue_line", line_start, line_end)
-            elif stripped_line.startswith('N '):
-                self.text_area.tag_add("green_line", line_start, line_end)
-            elif stripped_line.startswith('X ') or stripped_line.startswith('C '):
-                self.text_area.tag_add("grey_line", line_start, line_end)
-            elif stripped_line.startswith('M '):
-                self.text_area.tag_add("maroon_line", line_start, line_end)
-            else:
-                self.text_area.tag_add("normal_line", line_start, line_end)
-
-        # Restore cursor position and selection if they existed
-        if modified:
-            self.text_area.mark_set(tk.INSERT, current_cursor)
-            if has_selection:
-                self.text_area.tag_add(tk.SEL, selection_start, selection_end)
-
-        # --- Hyperlink detection (at the end) ---
-        self.text_area.tag_remove("hyperlink", "1.0", tk.END)
-        text = self.text_area.get("1.0", tk.END)
-        url_pattern = r'(https?://[^\s\n]+|www\.[^\s\n]+|ftp://[^\s\n]+)'
-        win_path_pattern = r'([A-Za-z]:[\\/](?:[^\s<>:"|?*\r\n]+[\\/])*[^\s<>:"|?*\r\n]+(?: [^\s<>:"|?*\r\n]+)*)'
-        # Unix path: /... (must have at least one slash after the initial slash)
-        unix_path_pattern = r'(/[^-\s<>:"|?*]+/[^-\s<>:"|?*]+(?:/[^-\s<>:"|?*]+)*)'
-        for pattern in [url_pattern, win_path_pattern, unix_path_pattern]:
-            for match in re.finditer(pattern, text, re.IGNORECASE):
-                start = f"1.0+{match.start()}c"
-                end = f"1.0+{match.end()}c"
-                self.text_area.tag_add("hyperlink", start, end)
-        self.text_area.tag_bind("hyperlink", "<Enter>", lambda e: self.text_area.config(cursor="hand2"))
-        self.text_area.tag_bind("hyperlink", "<Leave>", lambda e: self.text_area.config(cursor="arrow"))
-        self.text_area.tag_bind("hyperlink", "<Button-1>", self._handle_click)
-
-    def _update_line_formatting_event(self, event=None):
-        """Handle line formatting after key events."""
-        # Get the current line
-        current_line = self.text_area.get("insert linestart", "insert lineend")
-        
-        # Only process if the line starts with a heading marker AND auto-capitalize is enabled
-        if current_line.startswith('#') and Notepad.auto_capitalize_headings:
-            # Store cursor position
-            cursor_pos = self.text_area.index(tk.INSERT)
-            
-            # Format the line
-            formatted_line = self._format_heading_line(current_line)
-            if formatted_line != current_line:
-                # Replace the line content
-                self.text_area.delete("insert linestart", "insert lineend")
-                self.text_area.insert("insert linestart", formatted_line)
-                
-                # Restore cursor position
-                self.text_area.mark_set(tk.INSERT, cursor_pos)
-        
-        # Continue with regular line formatting
-        self._update_line_formatting()
-    # --- End new method ---
+    
 
     def rename_file(self):
         """Renames the currently open file."""
@@ -1354,7 +704,7 @@ class Notepad:
             finally:
                 self.text_area.config(autoseparators=original_autoseparators)
             
-            self._update_line_formatting()
+            self.line_formatter._update_line_formatting()
     # --- End method to prompt for date ---
 
     # --- Methods to Open Find/Replace Dialog ---
@@ -1392,7 +742,6 @@ class Notepad:
     def open_replace_dialog(self):
         self._launch_find_replace_dialog(replace_mode=True)
 
-
     def _find_dialog_closed(self, event=None):
         # Check if the event widget is the dialog we tracked
         if self.find_dialog is not None and event.widget == self.find_dialog:
@@ -1412,7 +761,7 @@ class Notepad:
                   pass
              finally:
                   self.find_dialog = None
-                  self._update_line_formatting()
+                  self.line_formatter._update_line_formatting()
 
     # --- End Find/Replace Dialog Methods ---
 
@@ -1425,7 +774,7 @@ class Notepad:
         except tk.TclError: # No selection
             # Default behavior: insert a tab at cursor
             self.text_area.insert(tk.INSERT, "\t")
-            self._update_line_formatting() # Update colors if a line prefix changes
+            self.line_formatter._update_line_formatting() # Update colors if a line prefix changes
             return "break" # Prevent focus change
 
         first_line_num = int(sel_first_idx.split('.')[0])
@@ -1451,7 +800,7 @@ class Notepad:
             # self.text_area.insert(current_cursor_pos, "\t")
             # self.text_area.tag_remove(tk.SEL, "1.0", tk.END) # Clear selection
             # self.text_area.mark_set(tk.INSERT, f"{current_cursor_pos}+{len('\t')}c")
-            # self._update_line_formatting()
+            # self.line_formatter._update_line_formatting()
             # return "break"
             #
             # For indenting the single selected line:
@@ -1482,7 +831,7 @@ class Notepad:
 
                 self.text_area.tag_add(tk.SEL, adj_sel_first, adj_sel_last)
                 self.text_area.mark_set(tk.INSERT, adj_sel_last) # Move cursor to end of new selection
-                self._update_line_formatting()
+                self.line_formatter._update_line_formatting()
         finally:
             self.text_area.config(autoseparators=original_autoseparators)
 
@@ -1565,7 +914,7 @@ class Notepad:
                     # If selection would invert, collapse it to the start
                     self.text_area.mark_set(tk.INSERT, adj_sel_first)
                 
-                self._update_line_formatting()
+                self.self.line_formatter._update_line_formatting()
         finally:
             self.text_area.config(autoseparators=original_autoseparators)
         
@@ -1670,7 +1019,7 @@ class Notepad:
         finally:
             self.text_area.config(autoseparators=original_autoseparators)
 
-        self._update_line_formatting()
+        self.line_formatter._update_line_formatting()
         return "break"  # Prevent default Tkinter Enter behavior
     # --- End Enter Key Handler ---
 
@@ -1837,9 +1186,6 @@ class Notepad:
         self.text_area.bind("<F5>", lambda e: self.insert_sydney_time())
         self.text_area.bind("<F6>", lambda e: self.prompt_and_insert_date())
         
-        # Add Ctrl+Shift+H for highlighting
-        self.text_area.bind("<Control-Shift-H>", self._handle_highlight)
-        
         # Add explicit Shift+Tab binding
         self.text_area.bind("<Shift-Tab>", self._handle_shift_tab_key)
         
@@ -1855,7 +1201,6 @@ class Notepad:
         # Bind to both root and text_area
         self.root.bind("<Control-o>", handle_ctrl_o)
         self.text_area.bind("<Control-o>", handle_ctrl_o)
-
 
     def _handle_ctrl_h(self, event):
         """Handle Ctrl+H key press."""
@@ -2094,7 +1439,7 @@ class Notepad:
                 start = f"1.0+{match.start()}c"
                 end = f"1.0+{match.end()}c"
                 self.text_area.tag_add("hyperlink", start, end)
-        self._update_line_formatting()
+        self.line_formatter._update_line_formatting()
 
         # Ensure tag_bind is set only once
         self.text_area.tag_bind("hyperlink", "<Enter>", lambda e: self.text_area.config(cursor="hand2"))
@@ -2132,101 +1477,6 @@ class Notepad:
                 messagebox.showinfo("Error", f"Could not open: {path}")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open {path}: {str(e)}")
-
-    # Add this new method to Notepad class
-    def _handle_highlight(self, event=None):
-        """Handle Ctrl+Shift+H key press for highlighting."""
-        if not Notepad.highlight_enabled:
-            return "break"
-            
-        try:
-            # Check if there's a selection
-            sel_start = self.text_area.index(tk.SEL_FIRST)
-            sel_end = self.text_area.index(tk.SEL_LAST)
-            
-            # Get all ranges with highlight tag within selection
-            ranges = self.text_area.tag_ranges("highlight")
-            has_highlight = False
-            
-            # Check if any part of the selection is already highlighted
-            for i in range(0, len(ranges), 2):
-                start = ranges[i]
-                end = ranges[i + 1]
-                if (self.text_area.compare(start, ">=", sel_start) and 
-                    self.text_area.compare(end, "<=", sel_end)):
-                    has_highlight = True
-                    break
-            
-            if has_highlight:
-                # Remove highlight from selection
-                self.text_area.tag_remove("highlight", sel_start, sel_end)
-            else:
-                # Add highlight to selection
-                self.text_area.tag_add("highlight", sel_start, sel_end)
-                
-        except tk.TclError:
-            # No selection - handle single line
-            cursor_pos = self.text_area.index(tk.INSERT)
-            line_start = self.text_area.index(f"{cursor_pos} linestart")
-            line_end = self.text_area.index(f"{cursor_pos} lineend")
-            
-            # Check if line is already highlighted
-            ranges = self.text_area.tag_ranges("highlight")
-            has_highlight = False
-            
-            for i in range(0, len(ranges), 2):
-                start = ranges[i]
-                end = ranges[i + 1]
-                if (self.text_area.compare(start, "==", line_start) and 
-                    self.text_area.compare(end, "==", line_end)):
-                    has_highlight = True
-                    break
-            
-            if has_highlight:
-                # Remove highlight from line
-                self.text_area.tag_remove("highlight", line_start, line_end)
-            else:
-                # Add highlight to line
-                self.text_area.tag_add("highlight", line_start, line_end)
-        
-        return "break"
-
-    # Add this method to the Notepad class
-    def _update_highlight_selection(self, event=None):
-        """Update the highlight_selected tag when selection changes"""
-        try:
-            sel_start = self.text_area.index(tk.SEL_FIRST)
-            sel_end = self.text_area.index(tk.SEL_LAST)
-            
-            # Clear previous highlight_selected tags
-            self.text_area.tag_remove("highlight_selected", "1.0", tk.END)
-            
-            # Get all highlighted ranges
-            ranges = self.text_area.tag_ranges("highlight")
-            
-            # For each highlighted range, check overlap with selection
-            for i in range(0, len(ranges), 2):
-                start = ranges[i]
-                end = ranges[i + 1]
-                
-                # If there's any overlap, apply highlight_selected tag
-                if not (self.text_area.compare(end, "<=", sel_start) or 
-                       self.text_area.compare(start, ">=", sel_end)):
-                    # Calculate overlap region using text widget's compare method
-                    if self.text_area.compare(start, "<", sel_start):
-                        overlap_start = sel_start
-                    else:
-                        overlap_start = start
-                        
-                    if self.text_area.compare(end, ">", sel_end):
-                        overlap_end = sel_end
-                    else:
-                        overlap_end = end
-                        
-                    self.text_area.tag_add("highlight_selected", overlap_start, overlap_end)
-        except tk.TclError:
-            # No selection, remove all highlight_selected tags
-            self.text_area.tag_remove("highlight_selected", "1.0", tk.END)
 
     def _set_file_permissions(self, filepath, readonly):
         """Set file permissions to readonly or writable."""
@@ -2270,219 +1520,6 @@ class Notepad:
         
         # Start the new window's event loop
         new_root.mainloop()
-
-# Add this after the other dialog classes
-class SettingsDialog(tk.Toplevel, CenterDialogMixin):
-    def __init__(self, master, notepad):
-        super().__init__(master)
-        self.notepad = notepad
-        self.title("Settings")
-        self.transient(master)
-        self.resizable(False, False)
-
-        # --- Initialize all variables at the top ---
-        self.reopen_last_var = tk.BooleanVar(self, value=bool(Notepad.reopen_last_file))
-        self.match_case_var = tk.BooleanVar(self, value=bool(Notepad.last_match_case_setting))
-        self.line_format_var = tk.BooleanVar(self, value=bool(Notepad.line_formatting_enabled))
-        self.auto_capitalize_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_headings))
-        self.auto_capitalize_first_word_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_first_word))
-        self.auto_capitalize_indented_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_indented))
-        self.highlight_enabled_var = tk.BooleanVar(self, value=bool(Notepad.highlight_enabled))
-        self.auto_full_stop_var = tk.BooleanVar(self, value=bool(Notepad.auto_full_stop))
-        self.readonly_mode_var = tk.BooleanVar(self, value=bool(Notepad.readonly_mode))
-        self.default_find_text_var = tk.StringVar(self, value=Notepad.default_find_text)
-        self.default_replace_text_var = tk.StringVar(self, value=Notepad.default_replace_text)
-
-        # --- Make dialog scrollable ---
-        content_frame = ttk.Frame(self)
-        content_frame.pack(fill="both", expand=True)
-
-        canvas = tk.Canvas(content_frame, borderwidth=0, highlightthickness=0, width=420)
-        vscroll = ttk.Scrollbar(content_frame, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=vscroll.set)
-        vscroll.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-
-        main_frame = ttk.Frame(canvas, padding="16 16 16 8")
-        main_frame_id = canvas.create_window((0, 0), window=main_frame, anchor="nw")
-
-        def _on_frame_configure(event):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-        main_frame.bind("<Configure>", _on_frame_configure)
-
-        def _on_canvas_configure(event):
-            canvas.itemconfig(main_frame_id, width=event.width)
-        canvas.bind("<Configure>", _on_canvas_configure)
-
-        # Mousewheel scrolling (bind_all for dialog lifetime)
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        self.bind_all("<MouseWheel>", _on_mousewheel)
-        # Unbind on close
-        def unbind_mousewheel():
-            self.unbind_all("<MouseWheel>")
-        self.protocol("WM_DELETE_WINDOW", lambda: (unbind_mousewheel(), self._on_cancel()))
-        self.bind("<Escape>", lambda e: (unbind_mousewheel(), self._on_cancel()))
-        self.bind("<Return>", lambda e: (unbind_mousewheel(), self._on_ok()))
-        # Also unbind in _on_ok and _on_cancel
-        old_on_ok = self._on_ok
-        def new_on_ok(*args, **kwargs):
-            unbind_mousewheel()
-            return old_on_ok(*args, **kwargs)
-        self._on_ok = new_on_ok
-        old_on_cancel = self._on_cancel
-        def new_on_cancel(*args, **kwargs):
-            unbind_mousewheel()
-            return old_on_cancel(*args, **kwargs)
-        self._on_cancel = new_on_cancel
-
-        # Section style
-        section_font = ("TkDefaultFont", 10, "bold")
-
-        # Startup Settings
-        startup_frame = ttk.LabelFrame(main_frame, text="Startup", padding="8")
-        startup_frame.pack(fill=tk.X, pady=(0, 12))
-        startup_frame.configure(labelwidget=ttk.Label(startup_frame, text="Startup", font=section_font))
-        reopen_check = ttk.Checkbutton(
-            startup_frame, 
-            text="Reopen last file on startup",
-            variable=self.reopen_last_var,
-            command=lambda: self._update_checkbox_state(self.reopen_last_var)
-        )
-        reopen_check.pack(anchor='w', pady=(0, 2))
-
-        # Search Settings
-        search_frame = ttk.LabelFrame(main_frame, text="Search", padding="8")
-        search_frame.pack(fill=tk.X, pady=(0, 12))
-        search_frame.configure(labelwidget=ttk.Label(search_frame, text="Search", font=section_font))
-        match_case_check = ttk.Checkbutton(
-            search_frame,
-            text="Match case by default",
-            variable=self.match_case_var,
-            command=lambda: self._update_checkbox_state(self.match_case_var)
-        )
-        match_case_check.pack(anchor='w', pady=(0, 2))
-        ttk.Label(search_frame, text="Default Find text:").pack(anchor='w', padx=2, pady=(6,0))
-        self.default_find_text_var = tk.StringVar(self, value=Notepad.default_find_text)
-        default_find_entry = ttk.Entry(search_frame, textvariable=self.default_find_text_var, width=20)
-        default_find_entry.pack(anchor='w', padx=2, pady=(0,4))
-        ttk.Label(search_frame, text="Default Replace text:").pack(anchor='w', padx=2, pady=(6,0))
-        self.default_replace_text_var = tk.StringVar(self, value=Notepad.default_replace_text)
-        default_replace_entry = ttk.Entry(search_frame, textvariable=self.default_replace_text_var, width=20)
-        default_replace_entry.pack(anchor='w', padx=2, pady=(0,2))
-
-        # Dynamic Line Formatting
-        format_frame = ttk.LabelFrame(main_frame, text="Dynamic Line Formatting", padding="8")
-        format_frame.pack(fill=tk.X, pady=(0, 12))
-        format_frame.configure(labelwidget=ttk.Label(format_frame, text="Dynamic Line Formatting", font=section_font))
-        format_check = ttk.Checkbutton(
-            format_frame,
-            text="Enable dynamic line formatting",
-            variable=self.line_format_var,
-            command=lambda: self._update_checkbox_state(self.line_format_var)
-        )
-        format_check.pack(anchor='w', pady=(0, 2))
-
-        # Heading Settings
-        heading_frame = ttk.LabelFrame(main_frame, text="Heading Settings", padding="8")
-        heading_frame.pack(fill=tk.X, pady=(0, 12))
-        heading_frame.configure(labelwidget=ttk.Label(heading_frame, text="Heading Settings", font=section_font))
-        capitalize_check = ttk.Checkbutton(
-            heading_frame,
-            text="Auto-capitalize heading words",
-            variable=self.auto_capitalize_var,
-            command=lambda: self._update_checkbox_state(self.auto_capitalize_var)
-        )
-        capitalize_check.pack(anchor='w', pady=(0, 2))
-
-        # Text Formatting
-        text_format_frame = ttk.LabelFrame(main_frame, text="Text Formatting", padding="8")
-        text_format_frame.pack(fill=tk.X, pady=(0, 12))
-        text_format_frame.configure(labelwidget=ttk.Label(text_format_frame, text="Text Formatting", font=section_font))
-        capitalize_first_word_check = ttk.Checkbutton(
-            text_format_frame,
-            text="Auto-capitalize first word in lines",
-            variable=self.auto_capitalize_first_word_var,
-            command=lambda: self._update_checkbox_state(self.auto_capitalize_first_word_var)
-        )
-        capitalize_first_word_check.pack(anchor='w', pady=(0, 2))
-        capitalize_indented_check = ttk.Checkbutton(
-            text_format_frame,
-            text="Include indented lines in auto-capitalization",
-            variable=self.auto_capitalize_indented_var,
-            command=lambda: self._update_checkbox_state(self.auto_capitalize_indented_var)
-        )
-        capitalize_indented_check.pack(anchor='w', pady=(0, 2))
-        auto_full_stop_check = ttk.Checkbutton(
-            text_format_frame,
-            text="Auto-add full stop at end of line on Enter",
-            variable=self.auto_full_stop_var,
-            command=lambda: self._update_checkbox_state(self.auto_full_stop_var)
-        )
-        auto_full_stop_check.pack(anchor='w', pady=(0, 2))
-        readonly_mode_check = ttk.Checkbutton(
-            text_format_frame,
-            text="Read-only mode (requires Save As for readonly files)",
-            variable=self.readonly_mode_var,
-            command=lambda: self._update_checkbox_state(self.readonly_mode_var)
-        )
-        readonly_mode_check.pack(anchor='w', pady=(0, 2))
-
-        # Highlighting Settings
-        highlight_frame = ttk.LabelFrame(main_frame, text="Highlighting", padding="8")
-        highlight_frame.pack(fill=tk.X, pady=(0, 12))
-        highlight_frame.configure(labelwidget=ttk.Label(highlight_frame, text="Highlighting", font=section_font))
-        highlight_check = ttk.Checkbutton(
-            highlight_frame,
-            text="Enable highlighting (Ctrl+Shift+H)",
-            variable=self.highlight_enabled_var,
-            command=lambda: self._update_checkbox_state(self.highlight_enabled_var)
-        )
-        highlight_check.pack(anchor='w', pady=(0, 2))
-
-        # --- OK/Cancel Buttons at bottom right ---
-        button_frame = ttk.Frame(self)
-        button_frame.pack(fill=tk.X, side=tk.BOTTOM, anchor="e", pady=(0, 8), padx=16)
-        ok_button = ttk.Button(button_frame, text="OK", command=self._on_ok, width=10)
-        ok_button.pack(side=tk.RIGHT, padx=(5, 0))
-        cancel_button = ttk.Button(button_frame, text="Cancel", command=self._on_cancel, width=10)
-        cancel_button.pack(side=tk.RIGHT)
-
-        # Bindings
-        self.bind("<Escape>", lambda e: self._on_cancel())
-        self.bind("<Return>", lambda e: self._on_ok())
-        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
-
-        # Center and make modal
-        self.center_dialog()
-        self.grab_set()
-        self.focus_set()
-
-    def _update_checkbox_state(self, var):
-        """Ensure checkbox state is properly updated"""
-        # Force the variable to be a proper boolean
-        var.set(bool(var.get()))
-
-    def _on_ok(self):
-        # Save settings using boolean values
-        Notepad.reopen_last_file = bool(self.reopen_last_var.get())
-        Notepad.last_match_case_setting = bool(self.match_case_var.get())
-        Notepad.line_formatting_enabled = bool(self.line_format_var.get())
-        Notepad.auto_capitalize_headings = bool(self.auto_capitalize_var.get())
-        Notepad.auto_capitalize_first_word = bool(self.auto_capitalize_first_word_var.get())
-        Notepad.auto_capitalize_indented = bool(self.auto_capitalize_indented_var.get())
-        Notepad.highlight_enabled = bool(self.highlight_enabled_var.get())
-        Notepad.auto_full_stop = bool(self.auto_full_stop_var.get())
-        Notepad.readonly_mode = bool(self.readonly_mode_var.get())
-        Notepad.default_find_text = self.default_find_text_var.get()
-        Notepad.default_replace_text = self.default_replace_text_var.get()
-        self.notepad._save_settings()
-        # Apply formatting changes immediately
-        self.notepad._update_line_formatting()
-        self.destroy()
-
-    def _on_cancel(self):
-        self.destroy()
 
 if __name__ == "__main__":
     # --- Argument Parsing ---
