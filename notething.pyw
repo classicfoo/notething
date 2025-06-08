@@ -796,8 +796,7 @@ class Notepad:
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="New", command=self.new_file, accelerator="Ctrl+N")
-        file_menu.add_command(label="New Window", command=self.open_new_window)
+        file_menu.add_command(label="New", command=self.open_new_window, accelerator="Ctrl+N")
         file_menu.add_command(label="Open...", command=self.open_file, accelerator="Ctrl+O")
         # Add submenu for recent files immediately after Open...
         self.recent_menu = tk.Menu(file_menu, tearoff=0)
@@ -830,7 +829,7 @@ class Notepad:
     def bind_hotkeys(self):
         """Bind keyboard shortcuts."""
         # File menu
-        self.root.bind("<Control-n>", lambda e: self.new_file())
+        self.root.bind("<Control-n>", lambda e: self.open_new_window())
         self.root.bind("<Control-o>", lambda e: self.open_file())
         self.root.bind("<Control-s>", lambda e: self.save_file())
         
@@ -1730,9 +1729,15 @@ class Notepad:
 
     def _on_close_window(self):
         """Handles window close event."""
-        if Notepad.open_window_count == 1:
-            # This is the last window being closed
+        # Decrement the window count
+        Notepad.open_window_count -= 1
+        
+        # If this was the last window, reset the first window initialization flag
+        if Notepad.open_window_count == 0:
             Notepad.first_window_initialized = False
+            Notepad.first_window_x = None
+            Notepad.first_window_y = None
+            
         self.root.destroy()
 
     def _add_to_recent_files(self, filepath):
@@ -2239,15 +2244,32 @@ class Notepad:
         return False
 
     def open_new_window(self):
-        import tkinter as tk
-        # Create a new Toplevel window (not a new Tk root)
-        new_root = tk.Toplevel(self.root)
+        """Open a new independent window."""
+        # Create a new Tk root window instead of a Toplevel
+        new_root = TkinterDnD.Tk()
+        
+        # Apply the same theme as the main window
+        style = ttk.Style(new_root)
+        try:
+            if new_root.tk.call('tk', 'windowingsystem') == 'win32':
+                style.theme_use('vista')
+            elif new_root.tk.call('tk', 'windowingsystem') == 'aqua':
+                style.theme_use('aqua')
+            else:
+                style.theme_use('clam')
+        except tk.TclError:
+            style.theme_use("default")
+            
         # Cascade: offset the new window from the current one
         x = self.root.winfo_x() + 40
         y = self.root.winfo_y() + 40
         new_root.geometry(f"+{x}+{y}")
-        # Create a new Notepad instance
+        
+        # Create a new Notepad instance with the new root
         Notepad(new_root)
+        
+        # Start the new window's event loop
+        new_root.mainloop()
 
 # Add this after the other dialog classes
 class SettingsDialog(tk.Toplevel, CenterDialogMixin):
