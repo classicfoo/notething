@@ -797,6 +797,7 @@ class Notepad:
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
         file_menu.add_command(label="New", command=self.new_file, accelerator="Ctrl+N")
+        file_menu.add_command(label="New Window", command=self.open_new_window)
         file_menu.add_command(label="Open...", command=self.open_file, accelerator="Ctrl+O")
         # Add submenu for recent files immediately after Open...
         self.recent_menu = tk.Menu(file_menu, tearoff=0)
@@ -2236,6 +2237,17 @@ class Notepad:
         except Exception as e:
             messagebox.showerror("Permission Error", f"Could not change file permissions:\n{e}")
         return False
+
+    def open_new_window(self):
+        import tkinter as tk
+        # Create a new Toplevel window (not a new Tk root)
+        new_root = tk.Toplevel(self.root)
+        # Cascade: offset the new window from the current one
+        x = self.root.winfo_x() + 40
+        y = self.root.winfo_y() + 40
+        new_root.geometry(f"+{x}+{y}")
+        # Create a new Notepad instance
+        Notepad(new_root)
 
 # Add this after the other dialog classes
 class SettingsDialog(tk.Toplevel, CenterDialogMixin):

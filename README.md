@@ -23,7 +23,7 @@ T This is a bullet.
 
 T Asdfasf
 
-T Asdfasfa
+T Asdfasfa.
 
 
 ## Features.
@@ -74,8 +74,10 @@ X Add a full stop after pressing enter on a line.
 	N User has to press enter for it auto add the full stop. 
 	N Add a setting under text formatting to enable or disable this feature. 
 X Make settings dialog scrollable.
-T Move selected date by using arrow keys on calendar widget. 
-
+X Move selected date by using arrow keys on calendar widget. 
+T Capitalise every word in heading.
+	N Right now it sees up to 3 hashtags as headings.
+	T Make it any number of hashtags
 
 
 ## Bugs
