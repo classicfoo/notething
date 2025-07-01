@@ -667,9 +667,6 @@ class Notepad:
 
         # Add URL detection and hyperlink functionality
         self.text_area.tag_configure("hyperlink", foreground="blue", underline=1)
-        self.text_area.tag_bind("hyperlink", "<Enter>", lambda e: self.text_area.config(cursor="hand2"))
-        self.text_area.tag_bind("hyperlink", "<Leave>", lambda e: self.text_area.config(cursor="arrow"))
-        self.text_area.bind("<Button-1>", self._handle_click)
 
         # Combined formatting handler
         def _update_all_formatting(event=None):
@@ -1240,9 +1237,7 @@ class Notepad:
                 start = f"1.0+{match.start()}c"
                 end = f"1.0+{match.end()}c"
                 self.text_area.tag_add("hyperlink", start, end)
-        self.text_area.tag_bind("hyperlink", "<Enter>", lambda e: self.text_area.config(cursor="hand2"))
-        self.text_area.tag_bind("hyperlink", "<Leave>", lambda e: self.text_area.config(cursor="arrow"))
-        self.text_area.tag_bind("hyperlink", "<Button-1>", self._handle_click)
+
 
     def _update_line_formatting_event(self, event=None):
         """Handle line formatting after key events."""
@@ -2087,7 +2082,7 @@ class Notepad:
         """Detect URLs and file paths in the text and make them clickable."""
         self.text_area.tag_remove("hyperlink", "1.0", tk.END)
         text = self.text_area.get("1.0", tk.END)
-        # Improved URL pattern: match until whitespace or newline
+        # Improved URL pattern: match until whitespace or newline (case-insensitive)
         url_pattern = r'(https?://[^\s\n]+|www\.[^\s\n]+|ftp://[^\s\n]+)'
         # Improved Windows file path: C:\... (allow spaces and all valid filename chars)
         win_path_pattern = r'[A-Za-z]:[\\/][^\s<>:"|?*\r\n]*'
@@ -2120,10 +2115,11 @@ class Notepad:
         """Open a URL in the default browser or a file in its default application."""
         try:
             path = path.strip()  # Remove leading/trailing whitespace and newlines
-            # Check if it's a URL
-            if path.startswith(('http://', 'https://', 'www.', 'ftp://')):
+            # Check if it's a URL (case-insensitive)
+            path_lower = path.lower()
+            if path_lower.startswith(('http://', 'https://', 'www.', 'ftp://')):
                 # Add http:// if it starts with www
-                if path.startswith('www.'):
+                if path_lower.startswith('www.'):
                     path = 'http://' + path
                 webbrowser.open(path)
             # Check if it's a file path
