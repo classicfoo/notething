@@ -754,12 +754,12 @@ class Notepad:
         self._load_settings()
 
         # Handle initial file loading based on whether this is the first window
-        if not Notepad.first_window_initialized:
+        if initial_file:
+            self._load_file(initial_file)
+        elif not Notepad.first_window_initialized:
             # This is the first window
             Notepad.first_window_initialized = True
-            if initial_file:
-                self._load_file(initial_file)
-            elif Notepad.reopen_last_file and Notepad.recent_files:
+            if Notepad.reopen_last_file and Notepad.recent_files:
                 # Reopen the most recently used file
                 self._load_file(Notepad.recent_files[0])
             else:
@@ -787,6 +787,9 @@ class Notepad:
         # Add these bindings in __init__ after other bindings
         self.text_area.bind('<<Selection>>', self._update_highlight_selection)
         self.text_area.bind('<ButtonRelease-1>', self._update_highlight_selection)
+
+        # In __init__, after creating self.text_area:
+        self.text_area.bind("<Button-3>", self._show_context_menu)
 
     def create_menu(self):
         """Create the application menu."""
@@ -817,6 +820,7 @@ class Notepad:
         edit_menu.add_command(label="Cut", command=lambda: self.text_area.event_generate("<<Cut>>"), accelerator="Ctrl+X")
         edit_menu.add_command(label="Copy", command=lambda: self.text_area.event_generate("<<Copy>>"), accelerator="Ctrl+C")
         edit_menu.add_command(label="Paste", command=lambda: self.text_area.event_generate("<<Paste>>"), accelerator="Ctrl+V")
+        edit_menu.add_command(label="Copy Path to File", command=self.copy_file_path_windows)
         edit_menu.add_separator()
         edit_menu.add_command(label="Find...", command=self.open_find_dialog, accelerator="Ctrl+F")
         edit_menu.add_command(label="Replace...", command=self.open_replace_dialog, accelerator="Ctrl+H")
@@ -2085,8 +2089,8 @@ class Notepad:
         text = self.text_area.get("1.0", tk.END)
         # Improved URL pattern: match until whitespace or newline
         url_pattern = r'(https?://[^\s\n]+|www\.[^\s\n]+|ftp://[^\s\n]+)'
-        # Windows file path: C:\... (allow spaces in the filename part)
-        win_path_pattern = r'([A-Za-z]:[\\/](?:[^\s<>:"|?*\r\n]+[\\/])*[^\s<>:"|?*\r\n]+(?: [^\s<>:"|?*\r\n]+)*)'
+        # Improved Windows file path: C:\... (allow spaces and all valid filename chars)
+        win_path_pattern = r'[A-Za-z]:[\\/][^\s<>:"|?*\r\n]*'
         # Unix path: /... (must have at least one slash after the initial slash)
         unix_path_pattern = r'(/[^-\s<>:"|?*]+/[^-\s<>:"|?*]+(?:/[^-\s<>:"|?*]+)*)'
         for pattern in [url_pattern, win_path_pattern, unix_path_pattern]:
@@ -2115,6 +2119,7 @@ class Notepad:
     def _open_url_or_file(self, path):
         """Open a URL in the default browser or a file in its default application."""
         try:
+            path = path.strip()  # Remove leading/trailing whitespace and newlines
             # Check if it's a URL
             if path.startswith(('http://', 'https://', 'www.', 'ftp://')):
                 # Add http:// if it starts with www
@@ -2123,15 +2128,53 @@ class Notepad:
                 webbrowser.open(path)
             # Check if it's a file path
             elif os.path.exists(path):
-                # Use the appropriate command based on the OS
-                if os.name == 'nt':  # Windows
-                    os.startfile(path)
-                else:  # Unix-like
-                    subprocess.run(['xdg-open', path])
+                # Check if it's a .txt or .md file to open in Notething
+                file_ext = os.path.splitext(path)[1].lower()
+                if file_ext in ['.txt', '.md']:
+                    # Open in a new Notething window
+                    self._open_in_notething(path)
+                else:
+                    # Use the appropriate command based on the OS for other file types
+                    if os.name == 'nt':  # Windows
+                        os.startfile(path)
+                    else:  # Unix-like
+                        subprocess.run(['xdg-open', path])
             else:
                 messagebox.showinfo("Error", f"Could not open: {path}")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to open {path}: {str(e)}")
+
+    def _open_in_notething(self, filepath):
+        """Open a file in a new Notething window."""
+        try:
+            filepath = os.path.normpath(filepath)
+            # Create a new Tk root window
+            new_root = TkinterDnD.Tk()
+            
+            # Apply the same theme as the main window
+            style = ttk.Style(new_root)
+            try:
+                if new_root.tk.call('tk', 'windowingsystem') == 'win32':
+                    style.theme_use('vista')
+                elif new_root.tk.call('tk', 'windowingsystem') == 'aqua':
+                    style.theme_use('aqua')
+                else:
+                    style.theme_use('clam')
+            except tk.TclError:
+                style.theme_use("default")
+                
+            # Cascade: offset the new window from the current one
+            x = self.root.winfo_x() + 40
+            y = self.root.winfo_y() + 40
+            new_root.geometry(f"+{x}+{y}")
+            
+            # Create a new Notepad instance with the new root and load the file
+            new_notepad = Notepad(new_root, initial_file=filepath)
+            
+            # Start the new window's event loop
+            new_root.mainloop()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open {filepath} in Notething: {str(e)}")
 
     # Add this new method to Notepad class
     def _handle_highlight(self, event=None):
@@ -2270,6 +2313,23 @@ class Notepad:
         
         # Start the new window's event loop
         new_root.mainloop()
+
+    def _show_context_menu(self, event):
+        menu = tk.Menu(self.root, tearoff=0)
+        menu.add_command(label="Copy Path to File", command=self.copy_file_path_windows)
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def copy_file_path_windows(self):
+        """Copy the current file path to clipboard in Windows style (backslashes)."""
+        if self.current_file:
+            win_path = self.current_file.replace('/', '\\')
+            self.root.clipboard_clear()
+            self.root.clipboard_append(win_path)
+            status_text = f"Status: Copied path to clipboard: {win_path}"
+            self.status_bar.config(text=status_text)
+            self.tooltip.set_text(status_text)
+        else:
+            messagebox.showinfo("Copy Path", "No file is currently open.")
 
 # Add this after the other dialog classes
 class SettingsDialog(tk.Toplevel, CenterDialogMixin):
