@@ -48,6 +48,7 @@ class CalendarDialog(tk.Toplevel, CenterDialogMixin):
         self.transient(master)
         self.title("Select Date")
         self.result_date = None
+        self.last_selection_time = 0
 
         # Get current date for initial display
         now = datetime.now()
@@ -80,6 +81,7 @@ class CalendarDialog(tk.Toplevel, CenterDialogMixin):
         self.bind("<Escape>", lambda e: self._on_cancel())
         self.bind("<Return>", lambda e: self._on_ok())
         self.cal.bind("<Return>", lambda e: self._on_ok())
+        self.cal.bind("<<CalendarSelected>>", self._on_date_select)
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         
         # Center the dialog
@@ -132,6 +134,12 @@ class CalendarDialog(tk.Toplevel, CenterDialogMixin):
             unbind_arrows()
             return old_on_cancel(*args, **kwargs)
         self._on_cancel = new_on_cancel
+
+    def _on_date_select(self, event):
+        current_time = time.time()
+        if current_time - self.last_selection_time < 0.3: # 300ms for double-click
+            self._on_ok()
+        self.last_selection_time = current_time
 
     def _on_ok(self):
         self.result_date = self.cal.selection_get() # Returns a datetime.date object
