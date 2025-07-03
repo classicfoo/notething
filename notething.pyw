@@ -48,6 +48,7 @@ class CalendarDialog(tk.Toplevel, CenterDialogMixin):
         self.transient(master)
         self.title("Select Date")
         self.result_date = None
+        self.last_selection_time = 0
 
         # Get current date for initial display
         now = datetime.now()
@@ -80,6 +81,7 @@ class CalendarDialog(tk.Toplevel, CenterDialogMixin):
         self.bind("<Escape>", lambda e: self._on_cancel())
         self.bind("<Return>", lambda e: self._on_ok())
         self.cal.bind("<Return>", lambda e: self._on_ok())
+        self.cal.bind("<<CalendarSelected>>", self._on_date_select)
         self.protocol("WM_DELETE_WINDOW", self._on_cancel)
         
         # Center the dialog
@@ -132,6 +134,12 @@ class CalendarDialog(tk.Toplevel, CenterDialogMixin):
             unbind_arrows()
             return old_on_cancel(*args, **kwargs)
         self._on_cancel = new_on_cancel
+
+    def _on_date_select(self, event):
+        current_time = time.time()
+        if current_time - self.last_selection_time < 0.3: # 300ms for double-click
+            self._on_ok()
+        self.last_selection_time = current_time
 
     def _on_ok(self):
         self.result_date = self.cal.selection_get() # Returns a datetime.date object
@@ -1319,20 +1327,11 @@ class Notepad:
         except Exception as e: # Catch other potential errors
              messagebox.showerror("Rename Error", f"An unexpected error occurred:\n{e}")
 
-    # --- Add method to insert Sydney time ---
-    def insert_sydney_time(self):
-        """Inserts the current time in Sydney, NSW at the cursor position."""
-        try:
-            sydney_tz = pytz.timezone('Australia/Sydney')
-            sydney_time = datetime.now(sydney_tz)
-            # Format as HH:MM:SS AM/PM or use 24-hour HH:MM:SS
-            time_str = sydney_time.strftime("%I:%M %p") # 12-hour format with AM/PM, no seconds
-            # time_str = sydney_time.strftime("%H:%M:%S")   # 24-hour format
-            
-            self.text_area.insert(tk.INSERT, time_str)
-        except Exception as e:
-            messagebox.showerror("Time Error", f"Could not get Sydney time:\n{e}")
-    # --- End method to insert Sydney time ---
+    def insert_military_date(self, event=None):
+        """Inserts the current date in YYYYMMDD format at the cursor position."""
+        date_str = datetime.now().strftime("%Y%m%d")
+        self.text_area.insert(tk.INSERT, date_str)
+        return "break"
 
     # --- Method to prompt for date and insert it ---
     def prompt_and_insert_date(self):
@@ -1833,7 +1832,7 @@ class Notepad:
         self.text_area.bind("<Control-Shift-End>", self._handle_ctrl_end)
         
         # Add F5 and F6 bindings
-        self.text_area.bind("<F5>", lambda e: self.insert_sydney_time())
+        self.text_area.bind("<F5>", self.insert_military_date)
         self.text_area.bind("<F6>", lambda e: self.prompt_and_insert_date())
         
         # Add Ctrl+Shift+H for highlighting
