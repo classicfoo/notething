@@ -1233,19 +1233,6 @@ class Notepad:
             if has_selection:
                 self.text_area.tag_add(tk.SEL, selection_start, selection_end)
 
-        # --- Hyperlink detection (at the end) ---
-        self.text_area.tag_remove("hyperlink", "1.0", tk.END)
-        text = self.text_area.get("1.0", tk.END)
-        url_pattern = r'(https?://[^\s\n]+|www\.[^\s\n]+|ftp://[^\s\n]+)'
-        win_path_pattern = r'([A-Za-z]:[\\/](?:[^\s<>:"|?*\r\n]+[\\/])*[^\s<>:"|?*\r\n]+(?: [^\s<>:"|?*\r\n]+)*)'
-        # Unix path: /... (must have at least one slash after the initial slash)
-        unix_path_pattern = r'(/[^-\s<>:"|?*]+/[^-\s<>:"|?*]+(?:/[^-\s<>:"|?*]+)*)'
-        for pattern in [url_pattern, win_path_pattern, unix_path_pattern]:
-            for match in re.finditer(pattern, text, re.IGNORECASE):
-                start = f"1.0+{match.start()}c"
-                end = f"1.0+{match.end()}c"
-                self.text_area.tag_add("hyperlink", start, end)
-
 
     def _update_line_formatting_event(self, event=None):
         """Handle line formatting after key events."""
@@ -1268,7 +1255,7 @@ class Notepad:
                 self.text_area.mark_set(tk.INSERT, cursor_pos)
         
         # Continue with regular line formatting
-        self._update_line_formatting()
+        self._update_all_formatting()
     # --- End new method ---
 
     def rename_file(self):
@@ -1668,7 +1655,7 @@ class Notepad:
         finally:
             self.text_area.config(autoseparators=original_autoseparators)
 
-        self._update_line_formatting()
+        self._update_all_formatting()
         return "break"  # Prevent default Tkinter Enter behavior
     # --- End Enter Key Handler ---
 
@@ -2087,14 +2074,19 @@ class Notepad:
         win_path_pattern = r'[A-Za-z]:[\\/][^\s<>:"|?*\r\n]*'
         # Unix path: /... (must have at least one slash after the initial slash)
         unix_path_pattern = r'(/[^-\s<>:"|?*]+/[^-\s<>:"|?*]+(?:/[^-\s<>:"|?*]+)*)'
-        for pattern in [url_pattern, win_path_pattern, unix_path_pattern]:
+        # Relative file path pattern
+        relative_path_pattern = r'\b[a-zA-Z0-9_-]+\.[a-zA-Z0-9_.-]+\b'
+        for pattern in [url_pattern, win_path_pattern, unix_path_pattern, relative_path_pattern]:
             for match in re.finditer(pattern, text, re.IGNORECASE):
+                matched_text = match.group(0)
+                # If the matched text ends with a period, and the character before the period is not a period, then exclude the trailing period
+                if matched_text.endswith('.') and not matched_text.endswith('..'):
+                    end = f"1.0+{match.end()-1}c"
+                else:
+                    end = f"1.0+{match.end()}c"
                 start = f"1.0+{match.start()}c"
-                end = f"1.0+{match.end()}c"
                 self.text_area.tag_add("hyperlink", start, end)
-        self._update_line_formatting()
 
-        # Ensure tag_bind is set only once
         self.text_area.tag_bind("hyperlink", "<Enter>", lambda e: self.text_area.config(cursor="hand2"))
         self.text_area.tag_bind("hyperlink", "<Leave>", lambda e: self.text_area.config(cursor="arrow"))
         self.text_area.tag_bind("hyperlink", "<Button-1>", self._handle_click)
@@ -2113,7 +2105,6 @@ class Notepad:
     def _open_url_or_file(self, path):
         """Open a URL in the default browser or a file in its default application."""
         try:
-            path = path.strip()  # Remove leading/trailing whitespace and newlines
             # Check if it's a URL (case-insensitive)
             path_lower = path.lower()
             if path_lower.startswith(('http://', 'https://', 'www.', 'ftp://')):
