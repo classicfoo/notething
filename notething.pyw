@@ -796,6 +796,9 @@ class Notepad:
         # In __init__, after creating self.text_area:
         self.text_area.bind("<Button-3>", self._show_context_menu)
 
+        self._detect_urls()
+
+
     def create_menu(self):
         """Create the application menu."""
         menubar = tk.Menu(self.root)
@@ -2070,13 +2073,15 @@ class Notepad:
         text = self.text_area.get("1.0", tk.END)
         # Improved URL pattern: match until whitespace or newline (case-insensitive)
         url_pattern = r'(https?://[^\s\n]+|www\.[^\s\n]+|ftp://[^\s\n]+)'
+        # Quoted Windows file path pattern
+        quoted_win_path_pattern = r'"[A-Za-z]:[\\/][^"]*"'
         # Improved Windows file path: C:\... (allow spaces and all valid filename chars)
         win_path_pattern = r'[A-Za-z]:[\\/][^\s<>:"|?*\r\n]*'
         # Unix path: /... (must have at least one slash after the initial slash)
         unix_path_pattern = r'(/[^-\s<>:"|?*]+/[^-\s<>:"|?*]+(?:/[^-\s<>:"|?*]+)*)'
         # Relative file path pattern
         relative_path_pattern = r'\b[a-zA-Z0-9_-]+\.[a-zA-Z0-9_.-]+\b'
-        for pattern in [url_pattern, win_path_pattern, unix_path_pattern, relative_path_pattern]:
+        for pattern in [url_pattern, quoted_win_path_pattern, win_path_pattern, unix_path_pattern, relative_path_pattern]:
             for match in re.finditer(pattern, text, re.IGNORECASE):
                 matched_text = match.group(0)
                 # If the matched text ends with a period, and the character before the period is not a period, then exclude the trailing period
@@ -2097,14 +2102,21 @@ class Notepad:
         ranges = self.text_area.tag_ranges("hyperlink")
         for start, end in zip(ranges[::2], ranges[1::2]):
             if self.text_area.compare(index, '>=', start) and self.text_area.compare(index, '<', end):
-                url = self.text_area.get(start, end)
-                self._open_url_or_file(url)
+                # If the path is quoted, strip the quotes before opening
+                path = self.text_area.get(start, end)
+                if path.startswith('"') and path.endswith('"'):
+                    path = path[1:-1]
+                self._open_url_or_file(path)
                 return "break"
         return None
 
     def _open_url_or_file(self, path):
         """Open a URL in the default browser or a file in its default application."""
         try:
+            # Strip quotes from file paths
+            if path.startswith('"') and path.endswith('"'):
+                path = path[1:-1]
+
             # Check if it's a URL (case-insensitive)
             path_lower = path.lower()
             if path_lower.startswith(('http://', 'https://', 'www.', 'ftp://')):
