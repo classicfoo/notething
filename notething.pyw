@@ -1945,7 +1945,7 @@ class Notepad:
                 with open(settings_path, 'r', encoding='utf-8') as f:
                     for line in f:
                         if '=' in line:
-                            key, value = line.strip().split('=', 1)
+                            key, value = line.split('=', 1)
                             if key == "reopen_last_file":
                                 Notepad.reopen_last_file = bool(int(value))
                             elif key == "match_case":
@@ -1965,9 +1965,9 @@ class Notepad:
                             elif key == "readonly_mode":
                                 Notepad.readonly_mode = bool(int(value))
                             elif key == "default_find_text":
-                                Notepad.default_find_text = value
+                                Notepad.default_find_text = value.rstrip('\r\n')
                             elif key == "default_replace_text":
-                                Notepad.default_replace_text = value
+                                Notepad.default_replace_text = value.rstrip('\r\n')
             
             # Also load recent files
             self._load_recent_files()

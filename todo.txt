@@ -2,4 +2,14 @@ T Write a unit test for URL parsing.
 
 T Spaces in document. "C:\Users\MichaelHuynh\Documents\_my_documents\work\resources\Hardship_Program_Information_Pack_v1.0.pdf".
 
-T make sure that we can make files readonly
+T Make sure that we can make files readonly.
+N Curently not working properly
+
+T Check to see if there is already a window open for the file you want to open.
+	N Sometimes changes are being made so this ensures we aren't opening duplicate copies
+
+T Bullets starting with "- " should also capitalise the first word.
+
+T Word wrap and horizontal scrollbar.
+
+T Open recent files not detecting urls.
