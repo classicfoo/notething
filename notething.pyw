@@ -228,7 +228,12 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         options_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
         self.match_case_check = ttk.Checkbutton(options_frame, text="Match case", variable=self.match_case_var)
         self.match_case_check.pack(anchor='w')
-        self.find_in_selection_check = ttk.Checkbutton(options_frame, text="Find in selection", variable=self.find_in_selection_var)
+        self.find_in_selection_check = ttk.Checkbutton(
+            options_frame,
+            text="Find in selection",
+            variable=self.find_in_selection_var,
+            command=self._on_find_in_selection_toggle,
+        )
         self.find_in_selection_check.pack(anchor='w')
         # Add "Wrap around" later if needed
 
@@ -268,6 +273,7 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         # Set "Find in selection" checkbox if there's a preserved selection
         if has_selection:
             self.find_in_selection_var.set(True)
+            self._on_find_in_selection_toggle()
         
         # Center the dialog
         self.center_dialog()
@@ -295,6 +301,11 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
             
         except tk.TclError:
             pass  # Widget might already be gone
+
+    def _on_find_in_selection_toggle(self):
+        """Auto-enable match case when searching within selection"""
+        if self.find_in_selection_var.get() and getattr(Notepad, "auto_match_case_in_selection", False):
+            self.match_case_var.set(True)
 
     def find_next(self):
         find_term = self.find_what_var.get()
@@ -561,6 +572,9 @@ class Notepad:
 
     # Add this with other class variables at the start of Notepad class
     last_match_case_setting = False  # Default to case-insensitive search
+
+    # Auto-enable Match case when searching within a selection
+    auto_match_case_in_selection = True
 
     # Change the variable name to be more accurate
     line_formatting_enabled = True  # Default to enabled
@@ -1366,6 +1380,12 @@ class Notepad:
         if replace_mode:
             self.find_dialog.match_case_var.set(Notepad.last_match_case_setting)  # Use class variable
 
+        if (
+            self.find_dialog.find_in_selection_var.get()
+            and Notepad.auto_match_case_in_selection
+        ):
+            self.find_dialog.match_case_var.set(True)
+
         # Set focus correctly
         if replace_mode:
             self.find_dialog.replace_entry.focus_set()
@@ -1921,6 +1941,7 @@ class Notepad:
                 # Save settings as key=value pairs
                 f.write(f"reopen_last_file={int(Notepad.reopen_last_file)}\n")
                 f.write(f"match_case={int(Notepad.last_match_case_setting)}\n")
+                f.write(f"auto_match_case_in_selection={int(Notepad.auto_match_case_in_selection)}\n")
                 f.write(f"line_formatting={int(Notepad.line_formatting_enabled)}\n")
                 f.write(f"auto_capitalize_headings={int(Notepad.auto_capitalize_headings)}\n")
                 f.write(f"auto_capitalize_first_word={int(Notepad.auto_capitalize_first_word)}\n")
@@ -1951,6 +1972,8 @@ class Notepad:
                                 Notepad.reopen_last_file = bool(int(value))
                             elif key == "match_case":
                                 Notepad.last_match_case_setting = bool(int(value))
+                            elif key == "auto_match_case_in_selection":
+                                Notepad.auto_match_case_in_selection = bool(int(value))
                             elif key == "line_formatting":
                                 Notepad.line_formatting_enabled = bool(int(value))
                             elif key == "auto_capitalize_headings":
@@ -2342,6 +2365,9 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         # --- Initialize all variables at the top ---
         self.reopen_last_var = tk.BooleanVar(master=self, value=bool(Notepad.reopen_last_file))
         self.match_case_var = tk.BooleanVar(master=self, value=bool(Notepad.last_match_case_setting))
+        self.auto_match_case_selection_var = tk.BooleanVar(
+            master=self, value=bool(Notepad.auto_match_case_in_selection)
+        )
         self.line_format_var = tk.BooleanVar(master=self, value=bool(Notepad.line_formatting_enabled))
         self.auto_capitalize_var = tk.BooleanVar(master=self, value=bool(Notepad.auto_capitalize_headings))
         self.auto_capitalize_first_word_var = tk.BooleanVar(master=self, value=bool(Notepad.auto_capitalize_first_word))
@@ -2421,6 +2447,13 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
             command=lambda: self._update_checkbox_state(self.match_case_var)
         )
         match_case_check.pack(anchor='w', pady=(0, 2))
+        auto_match_selection_check = ttk.Checkbutton(
+            search_frame,
+            text="Auto-enable Match case for selection searches",
+            variable=self.auto_match_case_selection_var,
+            command=lambda: self._update_checkbox_state(self.auto_match_case_selection_var)
+        )
+        auto_match_selection_check.pack(anchor='w', pady=(0, 2))
         ttk.Label(search_frame, text="Default Find text:").pack(anchor='w', padx=2, pady=(6,0))
         self.default_find_text_var = tk.StringVar(master=self, value=Notepad.default_find_text)
         default_find_entry = ttk.Entry(search_frame, textvariable=self.default_find_text_var, width=20)
@@ -2526,6 +2559,7 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         # Save settings using boolean values
         Notepad.reopen_last_file = bool(self.reopen_last_var.get())
         Notepad.last_match_case_setting = bool(self.match_case_var.get())
+        Notepad.auto_match_case_in_selection = bool(self.auto_match_case_selection_var.get())
         Notepad.line_formatting_enabled = bool(self.line_format_var.get())
         Notepad.auto_capitalize_headings = bool(self.auto_capitalize_var.get())
         Notepad.auto_capitalize_first_word = bool(self.auto_capitalize_first_word_var.get())
