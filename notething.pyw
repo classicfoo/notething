@@ -171,6 +171,10 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         self.match_case_var = tk.BooleanVar(master=self, value=False)  # Initialize with False
         self.find_in_selection_var = tk.BooleanVar(master=self, value=False)  # Initialize with False
 
+        # Track auto-applied Match case state
+        self._auto_match_case_applied = False
+        self._prev_match_case = None
+
         # Store the current selection before creating the Toplevel
         try:
             self.initial_sel_start = self.text_widget.index(tk.SEL_FIRST)
@@ -305,7 +309,14 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
     def _on_find_in_selection_toggle(self):
         """Auto-enable match case when searching within selection"""
         if self.find_in_selection_var.get() and getattr(Notepad, "auto_match_case_in_selection", False):
-            self.match_case_var.set(True)
+            if not self._auto_match_case_applied:
+                self._prev_match_case = self.match_case_var.get()
+                self.match_case_var.set(True)
+                self._auto_match_case_applied = True
+        elif self._auto_match_case_applied:
+            self.match_case_var.set(self._prev_match_case)
+            self._auto_match_case_applied = False
+
 
     def find_next(self):
         find_term = self.find_what_var.get()
@@ -1405,23 +1416,29 @@ class Notepad:
     def _find_dialog_closed(self, event=None):
         # Check if the event widget is the dialog we tracked
         if self.find_dialog is not None and event.widget == self.find_dialog:
-             try:
-                 self.text_area.tag_remove("search_highlight", "1.0", tk.END)
-             except tk.TclError:
-                 pass
+            try:
+                self.text_area.tag_remove("search_highlight", "1.0", tk.END)
+            except tk.TclError:
+                pass
 
-             # Save last values before clearing the reference
-             try:
-                  self.last_find_text = self.find_dialog.find_what_var.get()
-                  if hasattr(self.find_dialog, 'replace_with_var'):
-                       self.last_replace_text = self.find_dialog.replace_with_var.get()
-                  # Save match case setting to class variable
-                  Notepad.last_match_case_setting = self.find_dialog.match_case_var.get()
-             except tk.TclError:
-                  pass
-             finally:
-                  self.find_dialog = None
-                  self._update_line_formatting()
+            # Save last values before clearing the reference
+            try:
+                self.last_find_text = self.find_dialog.find_what_var.get()
+                if hasattr(self.find_dialog, 'replace_with_var'):
+                    self.last_replace_text = self.find_dialog.replace_with_var.get()
+                # Save match case setting to class variable
+                if (
+                    getattr(self.find_dialog, "_auto_match_case_applied", False)
+                    and self.find_dialog.find_in_selection_var.get()
+                ):
+                    Notepad.last_match_case_setting = self.find_dialog._prev_match_case
+                else:
+                    Notepad.last_match_case_setting = self.find_dialog.match_case_var.get()
+            except tk.TclError:
+                pass
+            finally:
+                self.find_dialog = None
+                self._update_line_formatting()
 
     # --- End Find/Replace Dialog Methods ---
 
