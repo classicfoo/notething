@@ -156,6 +156,7 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         # Store references before creating the dialog
         self.text_widget = text_widget
         self.master = master
+        self.replace_mode = replace_mode
         
         # Create the dialog
         super().__init__(master)
@@ -257,8 +258,10 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
             self.replace_all_btn.bind("<Return>", lambda e: self.replace_all())
 
         # --- Initial Focus and Bindings ---
-        self.find_entry.focus_set() # Start cursor in "Find what"
-        self.protocol("WM_DELETE_WINDOW", self._cleanup_custom_tags_and_destroy) # Handle closing via 'X' button
+        self.find_entry.focus_set()  # Start cursor in "Find what"
+        self.protocol(
+            "WM_DELETE_WINDOW", self._cleanup_custom_tags_and_destroy
+        )  # Handle closing via 'X' button
 
         # Bind Enter key in find entry to Find Next
         self.find_entry.bind("<Return>", lambda event: self.find_next())
@@ -281,11 +284,14 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         
         # Center the dialog
         self.center_dialog()
-        
-        # Set focus and make modal
-        self.grab_set()
+
+        # Set focus and highlight current text
         self.focus_set()
         self.find_entry.focus_set()
+        self.after_idle(self._select_all_text)
+
+        # Close the dialog when clicking outside
+        self.bind("<FocusOut>", self._on_focus_out, add=True)
 
     def _cleanup_custom_tags_and_destroy(self, event=None):
         """Clean up tags and then destroy the dialog"""
@@ -305,6 +311,21 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
             
         except tk.TclError:
             pass  # Widget might already be gone
+
+    def _on_focus_out(self, event):
+        """Close dialog when focus moves outside of it."""
+        self.after_idle(self._close_if_focus_lost)
+
+    def _close_if_focus_lost(self):
+        focused = self.focus_get()
+        if focused is None or focused.winfo_toplevel() is not self:
+            self._cleanup_custom_tags_and_destroy()
+
+    def _select_all_text(self):
+        """Select text in entries so it can be quickly replaced."""
+        self.find_entry.selection_range(0, tk.END)
+        if self.replace_mode and hasattr(self, "replace_entry"):
+            self.replace_entry.selection_range(0, tk.END)
 
     def _on_find_in_selection_toggle(self):
         """Auto-enable match case when searching within selection"""

@@ -51,6 +51,38 @@ class TestNotepad(unittest.TestCase):
         self.app._open_url_or_file(file_path)
         mock_open_in_notething.assert_called_with(file_path)
 
+
+class TestFindDialogBehavior(unittest.TestCase):
+    def setUp(self):
+        self.root = TkinterDnD.Tk()
+        self.root.withdraw()
+        self.app = Notepad(self.root)
+
+    def tearDown(self):
+        if self.app.find_dialog is not None:
+            try:
+                self.app.find_dialog.destroy()
+            except tk.TclError:
+                pass
+        self.root.destroy()
+
+    def test_find_dialog_highlights_text(self):
+        self.app.last_find_text = "sample"
+        self.app.open_find_dialog()
+        self.root.update()
+        dialog = self.app.find_dialog
+        self.root.update()
+        selected = dialog.find_entry.selection_get()
+        self.assertEqual(selected, "sample")
+
+    def test_find_dialog_closes_on_focus_out(self):
+        self.app.open_find_dialog()
+        self.root.update()
+        dialog = self.app.find_dialog
+        self.app.text_area.focus_set()
+        self.root.update()
+        self.assertFalse(dialog.winfo_exists())
+
 class TestDetectUrls(unittest.TestCase):
     def setUp(self):
         self.root = TkinterDnD.Tk()
