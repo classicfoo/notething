@@ -314,7 +314,9 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
 
     def _on_focus_out(self, event):
         """Close dialog when focus moves outside of it."""
-        self.after_idle(self._close_if_focus_lost)
+        # Delay the check slightly so operations that momentarily steal focus
+        # (like replace/replace_all) can restore it before we decide to close.
+        self.after(20, self._close_if_focus_lost)
 
     def _close_if_focus_lost(self):
         focused = self.focus_get()
@@ -435,27 +437,31 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
 
         # Check if the currently highlighted search result matches the find term
         highlight_range = self.text_widget.tag_ranges("search_highlight")
-        if highlight_range:
-            hl_start, hl_end = highlight_range
-            highlighted_text = self.text_widget.get(hl_start, hl_end)
+        try:
+            if highlight_range:
+                hl_start, hl_end = highlight_range
+                highlighted_text = self.text_widget.get(hl_start, hl_end)
 
-            # Compare highlighted text with find_term (respecting case option)
-            text_to_compare = highlighted_text if not nocase else highlighted_text.lower()
-            find_to_compare = find_term if not nocase else find_term.lower()
+                # Compare highlighted text with find_term (respecting case option)
+                text_to_compare = highlighted_text if not nocase else highlighted_text.lower()
+                find_to_compare = find_term if not nocase else find_term.lower()
 
-            if text_to_compare == find_to_compare:
-                # Remove highlight *before* deleting
-                self.text_widget.tag_remove("search_highlight", hl_start, hl_end)
-                self.text_widget.delete(hl_start, hl_end)
-                self.text_widget.insert(hl_start, replace_term)
-                # Move cursor to end of replaced text - this becomes the start for the *next* find
-                self.text_widget.mark_set(tk.INSERT, f"{hl_start}+{len(replace_term)}c")
-                # DO NOT automatically find next here. Let the user click Find Next again.
-                return # Stop after successful replace
+                if text_to_compare == find_to_compare:
+                    # Remove highlight *before* deleting
+                    self.text_widget.tag_remove("search_highlight", hl_start, hl_end)
+                    self.text_widget.delete(hl_start, hl_end)
+                    self.text_widget.insert(hl_start, replace_term)
+                    # Move cursor to end of replaced text - this becomes the start for the *next* find
+                    self.text_widget.mark_set(tk.INSERT, f"{hl_start}+{len(replace_term)}c")
+                    # DO NOT automatically find next here. Let the user click Find Next again.
+                    return  # Stop after successful replace
 
-        # If no highlight matches the find term,
-        # just find the next occurrence (as if Find Next was clicked).
-        self.find_next()
+            # If no highlight matches the find term,
+            # just find the next occurrence (as if Find Next was clicked).
+            self.find_next()
+        finally:
+            # Ensure the dialog regains focus after the operation completes
+            self.after_idle(lambda: self.find_entry.focus_set())
         # --- End Refined Replace logic ---
 
     def replace_all(self):
@@ -489,25 +495,25 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         count = 0
         current_pos = start_pos
         nocase = not self.match_case_var.get()
-        
+
         try:
             # Loop through and replace all occurrences
             while True:
                 found_pos = self.text_widget.search(find_term, current_pos, stopindex=stop_pos, nocase=nocase)
                 if not found_pos:
                     break
-                
+
                 # Calculate the end position of the found text
                 end_pos = f"{found_pos}+{len(find_term)}c"
-                
+
                 # Replace this occurrence
                 self.text_widget.delete(found_pos, end_pos)
                 self.text_widget.insert(found_pos, replace_term)
-                
+
                 # Update current position for next search
                 # Important: account for the different lengths of find and replace terms
                 current_pos = f"{found_pos}+{len(replace_term)}c"
-                
+
                 # Update stop position if we're searching in selection
                 # This is needed because the replacement might change text positions
                 if self.find_in_selection_var.get():
@@ -520,13 +526,13 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
                         char += length_diff
                         # Update stop_pos
                         stop_pos = f"{line}.{char}"
-                
+
                 count += 1
-            
+
             # Create a single undo entry for all replacements
             if count > 0:
                 self.text_widget.edit_separator()
-                
+
             # Show result message
             if count > 0:
                 messagebox.showinfo("Replace All", f"Replaced {count} occurrence(s).", parent=self)
@@ -535,10 +541,11 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
                     self.master._update_line_colors()
             else:
                 messagebox.showinfo("Replace All", f"Cannot find '{find_term}'", parent=self)
-                
+
         finally:
-            # Restore auto separators
+            # Restore auto separators and ensure focus returns to the dialog
             self.text_widget.config(autoseparators=original_autoseparators)
+            self.after_idle(lambda: self.find_entry.focus_set())
 
     def _swap_fields(self):
         """Swap the contents of find and replace fields."""
