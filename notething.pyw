@@ -317,6 +317,7 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
             self.match_case_var.set(self._prev_match_case)
             self._auto_match_case_applied = False
 
+
     def find_next(self):
         find_term = self.find_what_var.get()
         if not find_term:
@@ -1389,6 +1390,12 @@ class Notepad:
             self.find_dialog.find_what_var.set(self.last_find_text)
         if replace_mode:
             self.find_dialog.match_case_var.set(Notepad.last_match_case_setting)  # Use class variable
+
+        if (
+            self.find_dialog.find_in_selection_var.get()
+            and Notepad.auto_match_case_in_selection
+        ):
+            self.find_dialog.match_case_var.set(True)
 
         # Set focus correctly
         if replace_mode:
