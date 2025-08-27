@@ -166,10 +166,10 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         self.resizable(False, False)
 
         # Initialize variables with explicit parent
-        self.find_what_var = tk.StringVar(self)
-        self.replace_with_var = tk.StringVar(self)
-        self.match_case_var = tk.BooleanVar(self, value=False)  # Initialize with False
-        self.find_in_selection_var = tk.BooleanVar(self, value=False)  # Initialize with False
+        self.find_what_var = tk.StringVar(master=self)
+        self.replace_with_var = tk.StringVar(master=self)
+        self.match_case_var = tk.BooleanVar(master=self, value=False)  # Initialize with False
+        self.find_in_selection_var = tk.BooleanVar(master=self, value=False)  # Initialize with False
 
         # Store the current selection before creating the Toplevel
         try:
@@ -593,7 +593,7 @@ class Notepad:
         self.root = root
         self.root.title("Notething")
         self.current_file = None
-        self.readonly_var = tk.BooleanVar(value=False)  # Initialize readonly variable
+        self.readonly_var = tk.BooleanVar(master=self.root, value=False)  # Initialize readonly variable
         
         # Create the text area
         self.text_area = tk.Text(
@@ -2340,17 +2340,17 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         self.resizable(False, False)
 
         # --- Initialize all variables at the top ---
-        self.reopen_last_var = tk.BooleanVar(self, value=bool(Notepad.reopen_last_file))
-        self.match_case_var = tk.BooleanVar(self, value=bool(Notepad.last_match_case_setting))
-        self.line_format_var = tk.BooleanVar(self, value=bool(Notepad.line_formatting_enabled))
-        self.auto_capitalize_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_headings))
-        self.auto_capitalize_first_word_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_first_word))
-        self.auto_capitalize_indented_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_indented))
-        self.highlight_enabled_var = tk.BooleanVar(self, value=bool(Notepad.highlight_enabled))
-        self.auto_full_stop_var = tk.BooleanVar(self, value=bool(Notepad.auto_full_stop))
-        self.readonly_mode_var = tk.BooleanVar(self, value=bool(Notepad.readonly_mode))
-        self.default_find_text_var = tk.StringVar(self, value=Notepad.default_find_text)
-        self.default_replace_text_var = tk.StringVar(self, value=Notepad.default_replace_text)
+        self.reopen_last_var = tk.BooleanVar(master=self, value=bool(Notepad.reopen_last_file))
+        self.match_case_var = tk.BooleanVar(master=self, value=bool(Notepad.last_match_case_setting))
+        self.line_format_var = tk.BooleanVar(master=self, value=bool(Notepad.line_formatting_enabled))
+        self.auto_capitalize_var = tk.BooleanVar(master=self, value=bool(Notepad.auto_capitalize_headings))
+        self.auto_capitalize_first_word_var = tk.BooleanVar(master=self, value=bool(Notepad.auto_capitalize_first_word))
+        self.auto_capitalize_indented_var = tk.BooleanVar(master=self, value=bool(Notepad.auto_capitalize_indented))
+        self.highlight_enabled_var = tk.BooleanVar(master=self, value=bool(Notepad.highlight_enabled))
+        self.auto_full_stop_var = tk.BooleanVar(master=self, value=bool(Notepad.auto_full_stop))
+        self.readonly_mode_var = tk.BooleanVar(master=self, value=bool(Notepad.readonly_mode))
+        self.default_find_text_var = tk.StringVar(master=self, value=Notepad.default_find_text)
+        self.default_replace_text_var = tk.StringVar(master=self, value=Notepad.default_replace_text)
 
         # --- Make dialog scrollable ---
         content_frame = ttk.Frame(self)
@@ -2422,11 +2422,11 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         )
         match_case_check.pack(anchor='w', pady=(0, 2))
         ttk.Label(search_frame, text="Default Find text:").pack(anchor='w', padx=2, pady=(6,0))
-        self.default_find_text_var = tk.StringVar(self, value=Notepad.default_find_text)
+        self.default_find_text_var = tk.StringVar(master=self, value=Notepad.default_find_text)
         default_find_entry = ttk.Entry(search_frame, textvariable=self.default_find_text_var, width=20)
         default_find_entry.pack(anchor='w', padx=2, pady=(0,4))
         ttk.Label(search_frame, text="Default Replace text:").pack(anchor='w', padx=2, pady=(6,0))
-        self.default_replace_text_var = tk.StringVar(self, value=Notepad.default_replace_text)
+        self.default_replace_text_var = tk.StringVar(master=self, value=Notepad.default_replace_text)
         default_replace_entry = ttk.Entry(search_frame, textvariable=self.default_replace_text_var, width=20)
         default_replace_entry.pack(anchor='w', padx=2, pady=(0,2))
 
