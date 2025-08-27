@@ -996,9 +996,7 @@ class Notepad:
             self.readonly_var.set(False)
             return
 
-        # Determine the desired new state before attempting to change
-        current_state = self.readonly_var.get()
-        new_state = not current_state
+        new_state = self.readonly_var.get()
 
         try:
             if new_state:
@@ -1007,9 +1005,6 @@ class Notepad:
             else:
                 # Make file writable
                 os.chmod(self.current_file, 0o666)  # Read-write for all users
-
-            # Update internal state only after successful permission change
-            self.readonly_var.set(new_state)
 
             # Update window title
             self._update_title()
@@ -1022,8 +1017,7 @@ class Notepad:
 
         except Exception as e:
             messagebox.showerror("Permission Error", f"Could not change file permissions:\n{e}")
-            # Revert the checkbox state to the previous value
-            self.readonly_var.set(current_state)
+            # readonly_var remains unchanged
 
     def save_file(self):
         if self.current_file:  # If a file is already opened
