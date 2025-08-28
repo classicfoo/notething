@@ -175,6 +175,9 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         # Track auto-applied Match case state
         self._auto_match_case_applied = False
         self._prev_match_case = None
+        # Flag to prevent focus-out handler from closing dialog during internal operations
+        self._suppress_focus_out = False
+        self._close_after = None
 
         # Store the current selection before creating the Toplevel
         try:
@@ -314,14 +317,27 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
 
     def _on_focus_out(self, event):
         """Close dialog when focus moves outside of it."""
+        if self._suppress_focus_out:
+            return
         # Delay the check slightly so operations that momentarily steal focus
         # (like replace/replace_all) can restore it before we decide to close.
-        self.after(20, self._close_if_focus_lost)
+        self._close_after = self.after(20, self._close_if_focus_lost)
+
 
     def _close_if_focus_lost(self):
         focused = self.focus_get()
         if focused is None or focused.winfo_toplevel() is not self:
             self._cleanup_custom_tags_and_destroy()
+        self._close_after = None
+
+    def _refocus_find_entry(self):
+        """Return focus to the find entry after operations complete."""
+        if self.winfo_exists():
+            try:
+                self.find_entry.focus_set()
+            except tk.TclError:
+                pass
+        self._suppress_focus_out = False
 
     def _select_all_text(self):
         """Select text in entries so it can be quickly replaced."""
@@ -435,6 +451,15 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         replace_term = self.replace_with_var.get()
         nocase = not self.match_case_var.get()
 
+        # Prevent focus-out handler from closing dialog during replacement
+        if getattr(self, "_close_after", None):
+            try:
+                self.after_cancel(self._close_after)
+            except Exception:
+                pass
+            self._close_after = None
+        self._suppress_focus_out = True
+
         # Check if the currently highlighted search result matches the find term
         highlight_range = self.text_widget.tag_ranges("search_highlight")
         try:
@@ -461,18 +486,28 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
             self.find_next()
         finally:
             # Ensure the dialog regains focus after the operation completes
-            self.after_idle(lambda: self.find_entry.focus_set())
+            self.after_idle(self._refocus_find_entry)
+            
         # --- End Refined Replace logic ---
 
     def replace_all(self):
         """Replace all occurrences of the find term with the replace term."""
         find_term = self.find_what_var.get()
         replace_term = self.replace_with_var.get()
-        
+
         if not find_term:
             messagebox.showwarning("Replace All", "Please enter text to find.", parent=self)
             return
-        
+
+        # Prevent focus-out handler from closing dialog during replacement
+        if getattr(self, "_close_after", None):
+            try:
+                self.after_cancel(self._close_after)
+            except Exception:
+                pass
+            self._close_after = None
+        self._suppress_focus_out = True
+
         # Determine search boundaries
         if self.find_in_selection_var.get():
             if self.initial_sel_start and self.initial_sel_end:
@@ -484,14 +519,14 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         else:
             start_pos = "1.0"
             stop_pos = tk.END
-        
+
         # Remove any existing highlight
         self.text_widget.tag_remove("search_highlight", "1.0", tk.END)
-        
+
         # Turn off auto separators to make it a single undo operation
         original_autoseparators = self.text_widget.cget("autoseparators")
         self.text_widget.config(autoseparators=False)
-        
+
         count = 0
         current_pos = start_pos
         nocase = not self.match_case_var.get()
@@ -545,7 +580,7 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         finally:
             # Restore auto separators and ensure focus returns to the dialog
             self.text_widget.config(autoseparators=original_autoseparators)
-            self.after_idle(lambda: self.find_entry.focus_set())
+            self.after_idle(self._refocus_find_entry)
 
     def _swap_fields(self):
         """Swap the contents of find and replace fields."""
