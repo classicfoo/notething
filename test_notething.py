@@ -179,6 +179,28 @@ class TestHyperlinkBinding(unittest.TestCase):
         after = self.app.text_area.tag_bind("hyperlink", "<Button-1>")
         self.assertEqual(after, before)
 
+    @patch('tkinter.messagebox.showwarning')
+    def test_find_next_warning_does_not_close_dialog(self, mock_warn):
+        self.app.text_area.insert("1.0", "http://example.com")
+        self.app._detect_urls()
+        self.app.open_find_dialog()
+        self.root.update()
+        dialog = self.app.find_dialog
+
+        # Trigger find_next with empty search term to invoke showwarning
+        dialog.find_what_var.set("")
+        dialog.find_next()
+        self.root.update()
+
+        # Dialog should still exist and hyperlink binding remains disabled
+        self.assertTrue(dialog.winfo_exists())
+        self.assertFalse(self.app.text_area.tag_bind("hyperlink", "<Button-1>"))
+
+        dialog._cleanup_custom_tags_and_destroy()
+        self.root.update()
+
+        self.assertTrue(self.app.text_area.tag_bind("hyperlink", "<Button-1>"))
+
 
 if __name__ == '__main__':
     unittest.main()
