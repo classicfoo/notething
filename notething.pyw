@@ -323,6 +323,7 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         # (like replace/replace_all) can restore it before we decide to close.
         self._close_after = self.after(20, self._close_if_focus_lost)
 
+
     def _close_if_focus_lost(self):
         focused = self.focus_get()
         if focused is None or focused.winfo_toplevel() is not self:
@@ -486,6 +487,7 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         finally:
             # Ensure the dialog regains focus after the operation completes
             self.after_idle(self._refocus_find_entry)
+            
         # --- End Refined Replace logic ---
 
     def replace_all(self):
