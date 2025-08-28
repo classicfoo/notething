@@ -172,11 +172,13 @@ class TestHyperlinkBinding(unittest.TestCase):
         self.app.open_find_dialog()
         self.root.update()
         during = self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
+
         self.assertFalse(during)
 
         self.app.find_dialog._cleanup_custom_tags_and_destroy()
         self.root.update()
         after = self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
+
         self.assertEqual(after, before)
 
     @patch('tkinter.messagebox.showwarning')
@@ -198,12 +200,14 @@ class TestHyperlinkBinding(unittest.TestCase):
             self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
         )
 
+
         dialog._cleanup_custom_tags_and_destroy()
         self.root.update()
 
         self.assertTrue(
             self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
         )
+
 
 
 if __name__ == '__main__':
