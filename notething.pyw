@@ -152,11 +152,12 @@ class CalendarDialog(tk.Toplevel, CenterDialogMixin):
 
 # --- Find/Replace Dialog Class ---
 class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
-    def __init__(self, master, text_widget, replace_mode=False):
+    def __init__(self, master, text_widget, replace_mode=False, cleanup_callback=None):
         # Store references before creating the dialog
         self.text_widget = text_widget
         self.master = master
         self.replace_mode = replace_mode
+        self.cleanup_callback = cleanup_callback
         
         # Create the dialog
         super().__init__(master)
@@ -299,6 +300,11 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
     def _cleanup_custom_tags_and_destroy(self, event=None):
         """Clean up tags and then destroy the dialog"""
         self._cleanup_custom_tags()
+        if callable(self.cleanup_callback):
+            try:
+                self.cleanup_callback()
+            except Exception:
+                pass
         self.destroy()
 
     def _cleanup_custom_tags(self, event=None):
@@ -358,9 +364,19 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
 
 
     def find_next(self):
+        # Prevent focus-out handler from closing the dialog during search
+        if getattr(self, "_close_after", None):
+            try:
+                self.after_cancel(self._close_after)
+            except Exception:
+                pass
+            self._close_after = None
+        self._suppress_focus_out = True
+
         find_term = self.find_what_var.get()
         if not find_term:
             messagebox.showwarning("Find", "Please enter text to find.", parent=self)
+            self.after_idle(self._refocus_find_entry)
             return
 
         # Remove previous highlight
@@ -379,71 +395,75 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
                     start_pos = self.initial_sel_start
             else:
                 messagebox.showwarning("Find", "No text selected.", parent=self)
+                self.after_idle(self._refocus_find_entry)
                 return
         else:
             start_pos = self.text_widget.index(tk.INSERT)
             stop_index = tk.END
 
-        # Perform the search
-        nocase = not self.match_case_var.get()
-        found_pos = self.text_widget.search(find_term, start_pos, stopindex=stop_index, nocase=nocase)
+        try:
+            # Perform the search
+            nocase = not self.match_case_var.get()
+            found_pos = self.text_widget.search(find_term, start_pos, stopindex=stop_index, nocase=nocase)
 
-        if found_pos:
-            # Found a match in the current direction
-            end_pos = f"{found_pos}+{len(find_term)}c"
-            
-            # Apply search highlight
-            self.text_widget.tag_add("search_highlight", found_pos, end_pos)
-            
-            # Ensure search highlight is on top ONLY if we have a preserved selection
-            if self.initial_sel_start and self.initial_sel_end:
-                try:
-                    self.text_widget.tag_raise("search_highlight", self.preserved_sel_tag)
-                except tk.TclError:
-                    # In case the tag was removed or isn't defined
-                    pass
-            
-            # Make sure the found text is visible
-            self.text_widget.see(found_pos)
-            
-            # Move cursor to end of found text for next search
-            self.text_widget.mark_set(tk.INSERT, end_pos)
-            
-            # Bring dialog back to front
-            self.lift()
-        else:
-            # No match found in the current direction, offer to wrap around
-            if self.find_in_selection_var.get():
-                # For search in selection, wrap from selection start
-                wrap_start = self.initial_sel_start
-                wrap_message = "Reached the end of the selection. Continue from the beginning of the selection?"
+            if found_pos:
+                # Found a match in the current direction
+                end_pos = f"{found_pos}+{len(find_term)}c"
+
+                # Apply search highlight
+                self.text_widget.tag_add("search_highlight", found_pos, end_pos)
+
+                # Ensure search highlight is on top ONLY if we have a preserved selection
+                if self.initial_sel_start and self.initial_sel_end:
+                    try:
+                        self.text_widget.tag_raise("search_highlight", self.preserved_sel_tag)
+                    except tk.TclError:
+                        # In case the tag was removed or isn't defined
+                        pass
+                # Make sure the found text is visible
+                self.text_widget.see(found_pos)
+
+                # Move cursor to end of found text for next search
+                self.text_widget.mark_set(tk.INSERT, end_pos)
+
+                # Bring dialog back to front
+                self.lift()
             else:
-                # For normal search, wrap from document start
-                wrap_start = "1.0"
-                wrap_message = "Reached the end of the document. Continue from the beginning?"
-            
-            if messagebox.askyesno("Find", wrap_message, parent=self):
-                # Try searching from the beginning
-                found_pos = self.text_widget.search(find_term, wrap_start, stopindex=start_pos, nocase=nocase)
-                if found_pos:
-                    end_pos = f"{found_pos}+{len(find_term)}c"
-                    self.text_widget.tag_add("search_highlight", found_pos, end_pos)
-                    
-                    # Only try to raise tag if we have a preserved selection
-                    if self.initial_sel_start and self.initial_sel_end:
-                        try:
-                            self.text_widget.tag_raise("search_highlight", self.preserved_sel_tag)
-                        except tk.TclError:
-                            pass
-                        
-                    self.text_widget.see(found_pos)
-                    self.text_widget.mark_set(tk.INSERT, end_pos)
-                    self.lift()
+                # No match found in the current direction, offer to wrap around
+                if self.find_in_selection_var.get():
+                    # For search in selection, wrap from selection start
+                    wrap_start = self.initial_sel_start
+                    wrap_message = "Reached the end of the selection. Continue from the beginning of the selection?"
                 else:
-                    messagebox.showinfo("Find", f"Cannot find '{find_term}'", parent=self)
-            else:
-                # User chose not to wrap around, so do nothing
-                pass
+                    # For normal search, wrap from document start
+                    wrap_start = "1.0"
+                    wrap_message = "Reached the end of the document. Continue from the beginning?"
+
+                if messagebox.askyesno("Find", wrap_message, parent=self):
+                    # Try searching from the beginning
+                    found_pos = self.text_widget.search(find_term, wrap_start, stopindex=start_pos, nocase=nocase)
+                    if found_pos:
+                        end_pos = f"{found_pos}+{len(find_term)}c"
+                        self.text_widget.tag_add("search_highlight", found_pos, end_pos)
+
+                        # Only try to raise tag if we have a preserved selection
+                        if self.initial_sel_start and self.initial_sel_end:
+                            try:
+                                self.text_widget.tag_raise("search_highlight", self.preserved_sel_tag)
+                            except tk.TclError:
+                                pass
+
+                        self.text_widget.see(found_pos)
+                        self.text_widget.mark_set(tk.INSERT, end_pos)
+                        self.lift()
+                    else:
+                        messagebox.showinfo("Find", f"Cannot find '{find_term}'", parent=self)
+                else:
+                    # User chose not to wrap around, so do nothing
+                    pass
+        finally:
+            # Ensure the dialog regains focus after the operation completes
+            self.after_idle(self._refocus_find_entry)
 
     def replace(self):
         # --- Refined Replace logic ---
@@ -1443,7 +1463,24 @@ class Notepad:
             except tk.TclError:
                 self.find_dialog = None
 
-        self.find_dialog = FindReplaceDialog(self.root, self.text_area, replace_mode=replace_mode)
+        # Temporarily disable hyperlink clicks while the dialog is open
+        original_hyperlink_binding = self.text_area.tag_bind("hyperlink", "<Button-1>")
+        if original_hyperlink_binding:
+            self.text_area.tag_unbind("hyperlink", "<Button-1>")
+
+        def restore_hyperlink_binding():
+            if original_hyperlink_binding:
+                try:
+                    self.text_area.tag_bind("hyperlink", "<Button-1>", original_hyperlink_binding)
+                except tk.TclError:
+                    pass
+
+        self.find_dialog = FindReplaceDialog(
+            self.root,
+            self.text_area,
+            replace_mode=replace_mode,
+            cleanup_callback=restore_hyperlink_binding,
+        )
 
         # Set default values for replace dialog
         if replace_mode:
