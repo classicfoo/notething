@@ -152,11 +152,12 @@ class CalendarDialog(tk.Toplevel, CenterDialogMixin):
 
 # --- Find/Replace Dialog Class ---
 class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
-    def __init__(self, master, text_widget, replace_mode=False):
+    def __init__(self, master, text_widget, replace_mode=False, cleanup_callback=None):
         # Store references before creating the dialog
         self.text_widget = text_widget
         self.master = master
         self.replace_mode = replace_mode
+        self.cleanup_callback = cleanup_callback
         
         # Create the dialog
         super().__init__(master)
@@ -299,6 +300,11 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
     def _cleanup_custom_tags_and_destroy(self, event=None):
         """Clean up tags and then destroy the dialog"""
         self._cleanup_custom_tags()
+        if callable(self.cleanup_callback):
+            try:
+                self.cleanup_callback()
+            except Exception:
+                pass
         self.destroy()
 
     def _cleanup_custom_tags(self, event=None):
@@ -1443,7 +1449,24 @@ class Notepad:
             except tk.TclError:
                 self.find_dialog = None
 
-        self.find_dialog = FindReplaceDialog(self.root, self.text_area, replace_mode=replace_mode)
+        # Temporarily disable hyperlink clicks while the dialog is open
+        original_hyperlink_binding = self.text_area.tag_bind("hyperlink", "<Button-1>")
+        if original_hyperlink_binding:
+            self.text_area.tag_unbind("hyperlink", "<Button-1>")
+
+        def restore_hyperlink_binding():
+            if original_hyperlink_binding:
+                try:
+                    self.text_area.tag_bind("hyperlink", "<Button-1>", original_hyperlink_binding)
+                except tk.TclError:
+                    pass
+
+        self.find_dialog = FindReplaceDialog(
+            self.root,
+            self.text_area,
+            replace_mode=replace_mode,
+            cleanup_callback=restore_hyperlink_binding,
+        )
 
         # Set default values for replace dialog
         if replace_mode:
