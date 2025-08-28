@@ -1464,14 +1464,18 @@ class Notepad:
                 self.find_dialog = None
 
         # Temporarily disable hyperlink clicks while the dialog is open
-        original_hyperlink_binding = self.text_area.tag_bind("hyperlink", "<Button-1>")
+        original_hyperlink_binding = self.text_area.tag_bind(
+            "hyperlink", "<Button-1>", None
+        )
         if original_hyperlink_binding:
             self.text_area.tag_unbind("hyperlink", "<Button-1>")
 
         def restore_hyperlink_binding():
             if original_hyperlink_binding:
                 try:
-                    self.text_area.tag_bind("hyperlink", "<Button-1>", original_hyperlink_binding)
+                    self.text_area.tag_bind(
+                        "hyperlink", "<Button-1>", original_hyperlink_binding
+                    )
                 except tk.TclError:
                     pass
 

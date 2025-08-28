@@ -166,17 +166,19 @@ class TestHyperlinkBinding(unittest.TestCase):
     def test_hyperlink_binding_restored(self):
         self.app.text_area.insert("1.0", "http://example.com")
         self.app._detect_urls()
-        before = self.app.text_area.tag_bind("hyperlink", "<Button-1>")
+        before = self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
         self.assertTrue(before)
 
         self.app.open_find_dialog()
         self.root.update()
-        during = self.app.text_area.tag_bind("hyperlink", "<Button-1>")
+        during = self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
+
         self.assertFalse(during)
 
         self.app.find_dialog._cleanup_custom_tags_and_destroy()
         self.root.update()
-        after = self.app.text_area.tag_bind("hyperlink", "<Button-1>")
+        after = self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
+
         self.assertEqual(after, before)
 
     @patch('tkinter.messagebox.showwarning')
@@ -194,12 +196,18 @@ class TestHyperlinkBinding(unittest.TestCase):
 
         # Dialog should still exist and hyperlink binding remains disabled
         self.assertTrue(dialog.winfo_exists())
-        self.assertFalse(self.app.text_area.tag_bind("hyperlink", "<Button-1>"))
+        self.assertFalse(
+            self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
+        )
+
 
         dialog._cleanup_custom_tags_and_destroy()
         self.root.update()
 
-        self.assertTrue(self.app.text_area.tag_bind("hyperlink", "<Button-1>"))
+        self.assertTrue(
+            self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
+        )
+
 
 
 if __name__ == '__main__':
