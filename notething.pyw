@@ -1260,8 +1260,27 @@ class Notepad:
                 
                 # Return the formatted line
                 return prefix + capitalized_content
-                
+
         return line
+
+    def _sentence_case_line(self, line):
+        """Convert a line to sentence case (first letter capitalized, rest lowercase)."""
+        if not line.strip():
+            return line
+
+        # Preserve leading whitespace
+        leading_space = ''
+        for char in line:
+            if char.isspace():
+                leading_space += char
+            else:
+                break
+
+        content = line[len(leading_space):]
+        if not content:
+            return line
+
+        return leading_space + content[:1].upper() + content[1:].lower()
 
     def _update_line_formatting(self, event=None):
         """Update the formatting of all lines in the text area."""
@@ -1350,22 +1369,28 @@ class Notepad:
         """Handle line formatting after key events."""
         # Get the current line
         current_line = self.text_area.get("insert linestart", "insert lineend")
-        
-        # Only process if the line starts with a heading marker AND auto-capitalize is enabled
+        cursor_pos = self.text_area.index(tk.INSERT)
+
+        # Process heading formatting if enabled
         if current_line.startswith('#') and Notepad.auto_capitalize_headings:
-            # Store cursor position
-            cursor_pos = self.text_area.index(tk.INSERT)
-            
-            # Format the line
             formatted_line = self._format_heading_line(current_line)
             if formatted_line != current_line:
-                # Replace the line content
                 self.text_area.delete("insert linestart", "insert lineend")
                 self.text_area.insert("insert linestart", formatted_line)
-                
-                # Restore cursor position
                 self.text_area.mark_set(tk.INSERT, cursor_pos)
-        
+        else:
+            # If the line was previously a heading but no longer starts with '#',
+            # revert it to sentence case
+            if (
+                Notepad.auto_capitalize_headings and
+                "bold_line" in self.text_area.tag_names("insert linestart")
+            ):
+                formatted_line = self._sentence_case_line(current_line)
+                if formatted_line != current_line:
+                    self.text_area.delete("insert linestart", "insert lineend")
+                    self.text_area.insert("insert linestart", formatted_line)
+                    self.text_area.mark_set(tk.INSERT, cursor_pos)
+
         # Continue with regular line formatting
         self._update_all_formatting()
     # --- End new method ---
