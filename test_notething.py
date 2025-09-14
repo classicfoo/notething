@@ -5,10 +5,11 @@ import tkinter as tk
 from tkinterdnd2 import TkinterDnD
 from notething import Notepad
 
+
 class TestNotepad(unittest.TestCase):
     def setUp(self):
         self.root = TkinterDnD.Tk()
-        self.root.withdraw() # Hide window during tests
+        self.root.withdraw()  # Hide window during tests
         self.app = Notepad(self.root)
 
     def tearDown(self):
@@ -51,6 +52,39 @@ class TestNotepad(unittest.TestCase):
         self.app._open_url_or_file(file_path)
         mock_open_in_notething.assert_called_with(file_path)
 
+
+class TestFindDialogBehavior(unittest.TestCase):
+    def setUp(self):
+        self.root = TkinterDnD.Tk()
+        self.root.withdraw()
+        self.app = Notepad(self.root)
+
+    def tearDown(self):
+        if self.app.find_dialog is not None:
+            try:
+                self.app.find_dialog.destroy()
+            except tk.TclError:
+                pass
+        self.root.destroy()
+
+    def test_find_dialog_highlights_text(self):
+        self.app.last_find_text = "sample"
+        self.app.open_find_dialog()
+        self.root.update()
+        dialog = self.app.find_dialog
+        self.root.update()
+        selected = dialog.find_entry.selection_get()
+        self.assertEqual(selected, "sample")
+
+    def test_find_dialog_closes_on_focus_out(self):
+        self.app.open_find_dialog()
+        self.root.update()
+        dialog = self.app.find_dialog
+        self.app.text_area.focus_set()
+        self.root.update()
+        self.assertFalse(dialog.winfo_exists())
+
+
 class TestDetectUrls(unittest.TestCase):
     def setUp(self):
         self.root = TkinterDnD.Tk()
@@ -83,8 +117,8 @@ class TestDetectUrls(unittest.TestCase):
         self.run_test_on_text(r"File is at C:\Users\test.txt.", [r"C:\Users\test.txt"])
 
     def test_windows_path_with_spaces_quoted(self):
-        text = r'Here is the document: "C:\My Documents\report final.docx"'
-        expected = [r'"C:\My Documents\report final.docx"']
+        text = r'Here is the document: "C:\\My Documents\\report final.docx"'
+        expected = [r'"C:\\My Documents\\report final.docx"']
         self.run_test_on_text(text, expected)
 
     def test_unix_path_unquoted(self):
@@ -99,20 +133,83 @@ class TestDetectUrls(unittest.TestCase):
         self.run_test_on_text("This is just plain text.", [])
 
     def test_mixed_links(self):
-        text = r'My site is www.mysite.com and my file is "C:\Users\My Stuff\doc.txt".'
-        expected = ["www.mysite.com", r'"C:\Users\My Stuff\doc.txt"' ]
+        text = r'My site is www.mysite.com and my file is "C:\\Users\\My Stuff\\doc.txt".'
+        expected = ["www.mysite.com", r'"C:\\Users\\My Stuff\\doc.txt"']
         self.run_test_on_text(text, expected)
 
     def test_url_and_path_together(self):
-        text = r'Link: http://a.com/b.txt and path: C:\a\b.txt'
-        expected = ["http://a.com/b.txt", r"C:\a\b.txt"]
+        text = r'Link: http://a.com/b.txt and path: C:\\a\\b.txt'
+        expected = ["http://a.com/b.txt", r"C:\\a\\b.txt"]
         self.run_test_on_text(text, expected)
 
     def test_path_with_trailing_period(self):
-        self.run_test_on_text(r"The file is C:\folder\file.txt.", [r"C:\folder\file.txt"])
+        self.run_test_on_text(r"The file is C:\\folder\\file.txt.", [r"C:\\folder\\file.txt"])
 
     def test_do_not_detect_quoted_non_paths(self):
         self.run_test_on_text('He said "hello world" and left.', [])
 
+
+class TestHyperlinkBinding(unittest.TestCase):
+    def setUp(self):
+        self.root = TkinterDnD.Tk()
+        self.root.withdraw()
+        self.app = Notepad(self.root)
+
+    def tearDown(self):
+        if self.app.find_dialog is not None:
+            try:
+                self.app.find_dialog.destroy()
+            except tk.TclError:
+                pass
+        self.root.destroy()
+
+    def test_hyperlink_binding_restored(self):
+        self.app.text_area.insert("1.0", "http://example.com")
+        self.app._detect_urls()
+        before = self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
+        self.assertTrue(before)
+
+        self.app.open_find_dialog()
+        self.root.update()
+        during = self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
+
+        self.assertFalse(during)
+
+        self.app.find_dialog._cleanup_custom_tags_and_destroy()
+        self.root.update()
+        after = self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
+
+        self.assertEqual(after, before)
+
+    @patch('tkinter.messagebox.showwarning')
+    def test_find_next_warning_does_not_close_dialog(self, mock_warn):
+        self.app.text_area.insert("1.0", "http://example.com")
+        self.app._detect_urls()
+        self.app.open_find_dialog()
+        self.root.update()
+        dialog = self.app.find_dialog
+
+        # Trigger find_next with empty search term to invoke showwarning
+        dialog.find_what_var.set("")
+        dialog.find_next()
+        self.root.update()
+
+        # Dialog should still exist and hyperlink binding remains disabled
+        self.assertTrue(dialog.winfo_exists())
+        self.assertFalse(
+            self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
+        )
+
+
+        dialog._cleanup_custom_tags_and_destroy()
+        self.root.update()
+
+        self.assertTrue(
+            self.app.text_area.tag_bind("hyperlink", "<Button-1>", None)
+        )
+
+
+
 if __name__ == '__main__':
     unittest.main()
+

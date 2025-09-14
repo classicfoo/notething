@@ -152,10 +152,12 @@ class CalendarDialog(tk.Toplevel, CenterDialogMixin):
 
 # --- Find/Replace Dialog Class ---
 class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
-    def __init__(self, master, text_widget, replace_mode=False):
+    def __init__(self, master, text_widget, replace_mode=False, cleanup_callback=None):
         # Store references before creating the dialog
         self.text_widget = text_widget
         self.master = master
+        self.replace_mode = replace_mode
+        self.cleanup_callback = cleanup_callback
         
         # Create the dialog
         super().__init__(master)
@@ -166,10 +168,17 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         self.resizable(False, False)
 
         # Initialize variables with explicit parent
-        self.find_what_var = tk.StringVar(self)
-        self.replace_with_var = tk.StringVar(self)
-        self.match_case_var = tk.BooleanVar(self, value=False)  # Initialize with False
-        self.find_in_selection_var = tk.BooleanVar(self, value=False)  # Initialize with False
+        self.find_what_var = tk.StringVar(master=self)
+        self.replace_with_var = tk.StringVar(master=self)
+        self.match_case_var = tk.BooleanVar(master=self, value=False)  # Initialize with False
+        self.find_in_selection_var = tk.BooleanVar(master=self, value=False)  # Initialize with False
+
+        # Track auto-applied Match case state
+        self._auto_match_case_applied = False
+        self._prev_match_case = None
+        # Flag to prevent focus-out handler from closing dialog during internal operations
+        self._suppress_focus_out = False
+        self._close_after = None
 
         # Store the current selection before creating the Toplevel
         try:
@@ -228,7 +237,12 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         options_frame.pack(side=tk.LEFT, fill=tk.Y, padx=5)
         self.match_case_check = ttk.Checkbutton(options_frame, text="Match case", variable=self.match_case_var)
         self.match_case_check.pack(anchor='w')
-        self.find_in_selection_check = ttk.Checkbutton(options_frame, text="Find in selection", variable=self.find_in_selection_var)
+        self.find_in_selection_check = ttk.Checkbutton(
+            options_frame,
+            text="Find in selection",
+            variable=self.find_in_selection_var,
+            command=self._on_find_in_selection_toggle,
+        )
         self.find_in_selection_check.pack(anchor='w')
         # Add "Wrap around" later if needed
 
@@ -248,8 +262,10 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
             self.replace_all_btn.bind("<Return>", lambda e: self.replace_all())
 
         # --- Initial Focus and Bindings ---
-        self.find_entry.focus_set() # Start cursor in "Find what"
-        self.protocol("WM_DELETE_WINDOW", self._cleanup_custom_tags_and_destroy) # Handle closing via 'X' button
+        self.find_entry.focus_set()  # Start cursor in "Find what"
+        self.protocol(
+            "WM_DELETE_WINDOW", self._cleanup_custom_tags_and_destroy
+        )  # Handle closing via 'X' button
 
         # Bind Enter key in find entry to Find Next
         self.find_entry.bind("<Return>", lambda event: self.find_next())
@@ -268,18 +284,27 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         # Set "Find in selection" checkbox if there's a preserved selection
         if has_selection:
             self.find_in_selection_var.set(True)
+            self._on_find_in_selection_toggle()
         
         # Center the dialog
         self.center_dialog()
-        
-        # Set focus and make modal
-        self.grab_set()
+
+        # Set focus and highlight current text
         self.focus_set()
         self.find_entry.focus_set()
+        self.after_idle(self._select_all_text)
+
+        # Close the dialog when clicking outside
+        self.bind("<FocusOut>", self._on_focus_out, add=True)
 
     def _cleanup_custom_tags_and_destroy(self, event=None):
         """Clean up tags and then destroy the dialog"""
         self._cleanup_custom_tags()
+        if callable(self.cleanup_callback):
+            try:
+                self.cleanup_callback()
+            except Exception:
+                pass
         self.destroy()
 
     def _cleanup_custom_tags(self, event=None):
@@ -296,10 +321,62 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         except tk.TclError:
             pass  # Widget might already be gone
 
+    def _on_focus_out(self, event):
+        """Close dialog when focus moves outside of it."""
+        if self._suppress_focus_out:
+            return
+        # Delay the check slightly so operations that momentarily steal focus
+        # (like replace/replace_all) can restore it before we decide to close.
+        self._close_after = self.after(20, self._close_if_focus_lost)
+
+
+    def _close_if_focus_lost(self):
+        focused = self.focus_get()
+        if focused is None or focused.winfo_toplevel() is not self:
+            self._cleanup_custom_tags_and_destroy()
+        self._close_after = None
+
+    def _refocus_find_entry(self):
+        """Return focus to the find entry after operations complete."""
+        if self.winfo_exists():
+            try:
+                self.find_entry.focus_set()
+            except tk.TclError:
+                pass
+        self._suppress_focus_out = False
+
+    def _select_all_text(self):
+        """Select text in entries so it can be quickly replaced."""
+        self.find_entry.selection_range(0, tk.END)
+        if self.replace_mode and hasattr(self, "replace_entry"):
+            self.replace_entry.selection_range(0, tk.END)
+
+    def _on_find_in_selection_toggle(self):
+        """Auto-enable match case when searching within selection"""
+        if self.find_in_selection_var.get() and getattr(Notepad, "auto_match_case_in_selection", False):
+            if not self._auto_match_case_applied:
+                self._prev_match_case = self.match_case_var.get()
+                self.match_case_var.set(True)
+                self._auto_match_case_applied = True
+        elif self._auto_match_case_applied:
+            self.match_case_var.set(self._prev_match_case)
+            self._auto_match_case_applied = False
+
+
     def find_next(self):
+        # Prevent focus-out handler from closing the dialog during search
+        if getattr(self, "_close_after", None):
+            try:
+                self.after_cancel(self._close_after)
+            except Exception:
+                pass
+            self._close_after = None
+        self._suppress_focus_out = True
+
         find_term = self.find_what_var.get()
         if not find_term:
             messagebox.showwarning("Find", "Please enter text to find.", parent=self)
+            self.after_idle(self._refocus_find_entry)
             return
 
         # Remove previous highlight
@@ -318,71 +395,75 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
                     start_pos = self.initial_sel_start
             else:
                 messagebox.showwarning("Find", "No text selected.", parent=self)
+                self.after_idle(self._refocus_find_entry)
                 return
         else:
             start_pos = self.text_widget.index(tk.INSERT)
             stop_index = tk.END
 
-        # Perform the search
-        nocase = not self.match_case_var.get()
-        found_pos = self.text_widget.search(find_term, start_pos, stopindex=stop_index, nocase=nocase)
+        try:
+            # Perform the search
+            nocase = not self.match_case_var.get()
+            found_pos = self.text_widget.search(find_term, start_pos, stopindex=stop_index, nocase=nocase)
 
-        if found_pos:
-            # Found a match in the current direction
-            end_pos = f"{found_pos}+{len(find_term)}c"
-            
-            # Apply search highlight
-            self.text_widget.tag_add("search_highlight", found_pos, end_pos)
-            
-            # Ensure search highlight is on top ONLY if we have a preserved selection
-            if self.initial_sel_start and self.initial_sel_end:
-                try:
-                    self.text_widget.tag_raise("search_highlight", self.preserved_sel_tag)
-                except tk.TclError:
-                    # In case the tag was removed or isn't defined
-                    pass
-            
-            # Make sure the found text is visible
-            self.text_widget.see(found_pos)
-            
-            # Move cursor to end of found text for next search
-            self.text_widget.mark_set(tk.INSERT, end_pos)
-            
-            # Bring dialog back to front
-            self.lift()
-        else:
-            # No match found in the current direction, offer to wrap around
-            if self.find_in_selection_var.get():
-                # For search in selection, wrap from selection start
-                wrap_start = self.initial_sel_start
-                wrap_message = "Reached the end of the selection. Continue from the beginning of the selection?"
+            if found_pos:
+                # Found a match in the current direction
+                end_pos = f"{found_pos}+{len(find_term)}c"
+
+                # Apply search highlight
+                self.text_widget.tag_add("search_highlight", found_pos, end_pos)
+
+                # Ensure search highlight is on top ONLY if we have a preserved selection
+                if self.initial_sel_start and self.initial_sel_end:
+                    try:
+                        self.text_widget.tag_raise("search_highlight", self.preserved_sel_tag)
+                    except tk.TclError:
+                        # In case the tag was removed or isn't defined
+                        pass
+                # Make sure the found text is visible
+                self.text_widget.see(found_pos)
+
+                # Move cursor to end of found text for next search
+                self.text_widget.mark_set(tk.INSERT, end_pos)
+
+                # Bring dialog back to front
+                self.lift()
             else:
-                # For normal search, wrap from document start
-                wrap_start = "1.0"
-                wrap_message = "Reached the end of the document. Continue from the beginning?"
-            
-            if messagebox.askyesno("Find", wrap_message, parent=self):
-                # Try searching from the beginning
-                found_pos = self.text_widget.search(find_term, wrap_start, stopindex=start_pos, nocase=nocase)
-                if found_pos:
-                    end_pos = f"{found_pos}+{len(find_term)}c"
-                    self.text_widget.tag_add("search_highlight", found_pos, end_pos)
-                    
-                    # Only try to raise tag if we have a preserved selection
-                    if self.initial_sel_start and self.initial_sel_end:
-                        try:
-                            self.text_widget.tag_raise("search_highlight", self.preserved_sel_tag)
-                        except tk.TclError:
-                            pass
-                        
-                    self.text_widget.see(found_pos)
-                    self.text_widget.mark_set(tk.INSERT, end_pos)
-                    self.lift()
+                # No match found in the current direction, offer to wrap around
+                if self.find_in_selection_var.get():
+                    # For search in selection, wrap from selection start
+                    wrap_start = self.initial_sel_start
+                    wrap_message = "Reached the end of the selection. Continue from the beginning of the selection?"
                 else:
-                    messagebox.showinfo("Find", f"Cannot find '{find_term}'", parent=self)
-            else:
-                # User chose not to wrap around, so do nothing
-                pass
+                    # For normal search, wrap from document start
+                    wrap_start = "1.0"
+                    wrap_message = "Reached the end of the document. Continue from the beginning?"
+
+                if messagebox.askyesno("Find", wrap_message, parent=self):
+                    # Try searching from the beginning
+                    found_pos = self.text_widget.search(find_term, wrap_start, stopindex=start_pos, nocase=nocase)
+                    if found_pos:
+                        end_pos = f"{found_pos}+{len(find_term)}c"
+                        self.text_widget.tag_add("search_highlight", found_pos, end_pos)
+
+                        # Only try to raise tag if we have a preserved selection
+                        if self.initial_sel_start and self.initial_sel_end:
+                            try:
+                                self.text_widget.tag_raise("search_highlight", self.preserved_sel_tag)
+                            except tk.TclError:
+                                pass
+
+                        self.text_widget.see(found_pos)
+                        self.text_widget.mark_set(tk.INSERT, end_pos)
+                        self.lift()
+                    else:
+                        messagebox.showinfo("Find", f"Cannot find '{find_term}'", parent=self)
+                else:
+                    # User chose not to wrap around, so do nothing
+                    pass
+        finally:
+            # Ensure the dialog regains focus after the operation completes
+            self.after_idle(self._refocus_find_entry)
 
     def replace(self):
         # --- Refined Replace logic ---
@@ -390,40 +471,63 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         replace_term = self.replace_with_var.get()
         nocase = not self.match_case_var.get()
 
+        # Prevent focus-out handler from closing dialog during replacement
+        if getattr(self, "_close_after", None):
+            try:
+                self.after_cancel(self._close_after)
+            except Exception:
+                pass
+            self._close_after = None
+        self._suppress_focus_out = True
+
         # Check if the currently highlighted search result matches the find term
         highlight_range = self.text_widget.tag_ranges("search_highlight")
-        if highlight_range:
-            hl_start, hl_end = highlight_range
-            highlighted_text = self.text_widget.get(hl_start, hl_end)
+        try:
+            if highlight_range:
+                hl_start, hl_end = highlight_range
+                highlighted_text = self.text_widget.get(hl_start, hl_end)
 
-            # Compare highlighted text with find_term (respecting case option)
-            text_to_compare = highlighted_text if not nocase else highlighted_text.lower()
-            find_to_compare = find_term if not nocase else find_term.lower()
+                # Compare highlighted text with find_term (respecting case option)
+                text_to_compare = highlighted_text if not nocase else highlighted_text.lower()
+                find_to_compare = find_term if not nocase else find_term.lower()
 
-            if text_to_compare == find_to_compare:
-                # Remove highlight *before* deleting
-                self.text_widget.tag_remove("search_highlight", hl_start, hl_end)
-                self.text_widget.delete(hl_start, hl_end)
-                self.text_widget.insert(hl_start, replace_term)
-                # Move cursor to end of replaced text - this becomes the start for the *next* find
-                self.text_widget.mark_set(tk.INSERT, f"{hl_start}+{len(replace_term)}c")
-                # DO NOT automatically find next here. Let the user click Find Next again.
-                return # Stop after successful replace
+                if text_to_compare == find_to_compare:
+                    # Remove highlight *before* deleting
+                    self.text_widget.tag_remove("search_highlight", hl_start, hl_end)
+                    self.text_widget.delete(hl_start, hl_end)
+                    self.text_widget.insert(hl_start, replace_term)
+                    # Move cursor to end of replaced text - this becomes the start for the *next* find
+                    self.text_widget.mark_set(tk.INSERT, f"{hl_start}+{len(replace_term)}c")
+                    # DO NOT automatically find next here. Let the user click Find Next again.
+                    return  # Stop after successful replace
 
-        # If no highlight matches the find term,
-        # just find the next occurrence (as if Find Next was clicked).
-        self.find_next()
+            # If no highlight matches the find term,
+            # just find the next occurrence (as if Find Next was clicked).
+            self.find_next()
+        finally:
+            # Ensure the dialog regains focus after the operation completes
+            self.after_idle(self._refocus_find_entry)
+            
         # --- End Refined Replace logic ---
 
     def replace_all(self):
         """Replace all occurrences of the find term with the replace term."""
         find_term = self.find_what_var.get()
         replace_term = self.replace_with_var.get()
-        
+
         if not find_term:
             messagebox.showwarning("Replace All", "Please enter text to find.", parent=self)
             return
-        
+
+        # Prevent focus-out handler from closing dialog during replacement
+        if getattr(self, "_close_after", None):
+            try:
+                self.after_cancel(self._close_after)
+            except Exception:
+                pass
+            self._close_after = None
+        self._suppress_focus_out = True
+
         # Determine search boundaries
         if self.find_in_selection_var.get():
             if self.initial_sel_start and self.initial_sel_end:
@@ -435,36 +539,36 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
         else:
             start_pos = "1.0"
             stop_pos = tk.END
-        
+
         # Remove any existing highlight
         self.text_widget.tag_remove("search_highlight", "1.0", tk.END)
-        
+
         # Turn off auto separators to make it a single undo operation
         original_autoseparators = self.text_widget.cget("autoseparators")
         self.text_widget.config(autoseparators=False)
-        
+
         count = 0
         current_pos = start_pos
         nocase = not self.match_case_var.get()
-        
+
         try:
             # Loop through and replace all occurrences
             while True:
                 found_pos = self.text_widget.search(find_term, current_pos, stopindex=stop_pos, nocase=nocase)
                 if not found_pos:
                     break
-                
+
                 # Calculate the end position of the found text
                 end_pos = f"{found_pos}+{len(find_term)}c"
-                
+
                 # Replace this occurrence
                 self.text_widget.delete(found_pos, end_pos)
                 self.text_widget.insert(found_pos, replace_term)
-                
+
                 # Update current position for next search
                 # Important: account for the different lengths of find and replace terms
                 current_pos = f"{found_pos}+{len(replace_term)}c"
-                
+
                 # Update stop position if we're searching in selection
                 # This is needed because the replacement might change text positions
                 if self.find_in_selection_var.get():
@@ -477,13 +581,13 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
                         char += length_diff
                         # Update stop_pos
                         stop_pos = f"{line}.{char}"
-                
+
                 count += 1
-            
+
             # Create a single undo entry for all replacements
             if count > 0:
                 self.text_widget.edit_separator()
-                
+
             # Show result message
             if count > 0:
                 messagebox.showinfo("Replace All", f"Replaced {count} occurrence(s).", parent=self)
@@ -492,10 +596,11 @@ class FindReplaceDialog(tk.Toplevel, CenterDialogMixin):
                     self.master._update_line_colors()
             else:
                 messagebox.showinfo("Replace All", f"Cannot find '{find_term}'", parent=self)
-                
+
         finally:
-            # Restore auto separators
+            # Restore auto separators and ensure focus returns to the dialog
             self.text_widget.config(autoseparators=original_autoseparators)
+            self.after_idle(self._refocus_find_entry)
 
     def _swap_fields(self):
         """Swap the contents of find and replace fields."""
@@ -562,6 +667,9 @@ class Notepad:
     # Add this with other class variables at the start of Notepad class
     last_match_case_setting = False  # Default to case-insensitive search
 
+    # Auto-enable Match case when searching within a selection
+    auto_match_case_in_selection = True
+
     # Change the variable name to be more accurate
     line_formatting_enabled = True  # Default to enabled
 
@@ -593,7 +701,7 @@ class Notepad:
         self.root = root
         self.root.title("Notething")
         self.current_file = None
-        self.readonly_var = tk.BooleanVar(value=False)  # Initialize readonly variable
+        self.readonly_var = tk.BooleanVar(master=self.root, value=False)  # Initialize readonly variable
         
         # Create the text area
         self.text_area = tk.Text(
@@ -996,27 +1104,28 @@ class Notepad:
             self.readonly_var.set(False)
             return
 
+        new_state = self.readonly_var.get()
+
         try:
-            if self.readonly_var.get():
+            if new_state:
                 # Make file readonly
                 os.chmod(self.current_file, 0o444)  # Read-only for all users
             else:
                 # Make file writable
                 os.chmod(self.current_file, 0o666)  # Read-write for all users
-            
+
             # Update window title
             self._update_title()
-            
+
             # Update status bar
-            status = "read-only" if self.readonly_var.get() else "writable"
+            status = "read-only" if new_state else "writable"
             status_text = f"Status: File is now {status}"
             self.status_bar.config(text=status_text)
             self.tooltip.set_text(status_text)
-            
+
         except Exception as e:
             messagebox.showerror("Permission Error", f"Could not change file permissions:\n{e}")
-            # Revert the checkbox state
-            self.readonly_var.set(not self.readonly_var.get())
+            # readonly_var remains unchanged
 
     def save_file(self):
         if self.current_file:  # If a file is already opened
@@ -1151,8 +1260,27 @@ class Notepad:
                 
                 # Return the formatted line
                 return prefix + capitalized_content
-                
+
         return line
+
+    def _sentence_case_line(self, line):
+        """Convert a line to sentence case (first letter capitalized, rest lowercase)."""
+        if not line.strip():
+            return line
+
+        # Preserve leading whitespace
+        leading_space = ''
+        for char in line:
+            if char.isspace():
+                leading_space += char
+            else:
+                break
+
+        content = line[len(leading_space):]
+        if not content:
+            return line
+
+        return leading_space + content[:1].upper() + content[1:].lower()
 
     def _update_line_formatting(self, event=None):
         """Update the formatting of all lines in the text area."""
@@ -1241,22 +1369,28 @@ class Notepad:
         """Handle line formatting after key events."""
         # Get the current line
         current_line = self.text_area.get("insert linestart", "insert lineend")
-        
-        # Only process if the line starts with a heading marker AND auto-capitalize is enabled
+        cursor_pos = self.text_area.index(tk.INSERT)
+
+        # Process heading formatting if enabled
         if current_line.startswith('#') and Notepad.auto_capitalize_headings:
-            # Store cursor position
-            cursor_pos = self.text_area.index(tk.INSERT)
-            
-            # Format the line
             formatted_line = self._format_heading_line(current_line)
             if formatted_line != current_line:
-                # Replace the line content
                 self.text_area.delete("insert linestart", "insert lineend")
                 self.text_area.insert("insert linestart", formatted_line)
-                
-                # Restore cursor position
                 self.text_area.mark_set(tk.INSERT, cursor_pos)
-        
+        else:
+            # If the line was previously a heading but no longer starts with '#',
+            # revert it to sentence case
+            if (
+                Notepad.auto_capitalize_headings and
+                "bold_line" in self.text_area.tag_names("insert linestart")
+            ):
+                formatted_line = self._sentence_case_line(current_line)
+                if formatted_line != current_line:
+                    self.text_area.delete("insert linestart", "insert lineend")
+                    self.text_area.insert("insert linestart", formatted_line)
+                    self.text_area.mark_set(tk.INSERT, cursor_pos)
+
         # Continue with regular line formatting
         self._update_all_formatting()
     # --- End new method ---
@@ -1354,7 +1488,28 @@ class Notepad:
             except tk.TclError:
                 self.find_dialog = None
 
-        self.find_dialog = FindReplaceDialog(self.root, self.text_area, replace_mode=replace_mode)
+        # Temporarily disable hyperlink clicks while the dialog is open
+        original_hyperlink_binding = self.text_area.tag_bind(
+            "hyperlink", "<Button-1>", None
+        )
+        if original_hyperlink_binding:
+            self.text_area.tag_unbind("hyperlink", "<Button-1>")
+
+        def restore_hyperlink_binding():
+            if original_hyperlink_binding:
+                try:
+                    self.text_area.tag_bind(
+                        "hyperlink", "<Button-1>", original_hyperlink_binding
+                    )
+                except tk.TclError:
+                    pass
+
+        self.find_dialog = FindReplaceDialog(
+            self.root,
+            self.text_area,
+            replace_mode=replace_mode,
+            cleanup_callback=restore_hyperlink_binding,
+        )
 
         # Set default values for replace dialog
         if replace_mode:
@@ -1364,6 +1519,12 @@ class Notepad:
             self.find_dialog.find_what_var.set(self.last_find_text)
         if replace_mode:
             self.find_dialog.match_case_var.set(Notepad.last_match_case_setting)  # Use class variable
+
+        if (
+            self.find_dialog.find_in_selection_var.get()
+            and Notepad.auto_match_case_in_selection
+        ):
+            self.find_dialog.match_case_var.set(True)
 
         # Set focus correctly
         if replace_mode:
@@ -1384,23 +1545,29 @@ class Notepad:
     def _find_dialog_closed(self, event=None):
         # Check if the event widget is the dialog we tracked
         if self.find_dialog is not None and event.widget == self.find_dialog:
-             try:
-                 self.text_area.tag_remove("search_highlight", "1.0", tk.END)
-             except tk.TclError:
-                 pass
+            try:
+                self.text_area.tag_remove("search_highlight", "1.0", tk.END)
+            except tk.TclError:
+                pass
 
-             # Save last values before clearing the reference
-             try:
-                  self.last_find_text = self.find_dialog.find_what_var.get()
-                  if hasattr(self.find_dialog, 'replace_with_var'):
-                       self.last_replace_text = self.find_dialog.replace_with_var.get()
-                  # Save match case setting to class variable
-                  Notepad.last_match_case_setting = self.find_dialog.match_case_var.get()
-             except tk.TclError:
-                  pass
-             finally:
-                  self.find_dialog = None
-                  self._update_line_formatting()
+            # Save last values before clearing the reference
+            try:
+                self.last_find_text = self.find_dialog.find_what_var.get()
+                if hasattr(self.find_dialog, 'replace_with_var'):
+                    self.last_replace_text = self.find_dialog.replace_with_var.get()
+                # Save match case setting to class variable
+                if (
+                    getattr(self.find_dialog, "_auto_match_case_applied", False)
+                    and self.find_dialog.find_in_selection_var.get()
+                ):
+                    Notepad.last_match_case_setting = self.find_dialog._prev_match_case
+                else:
+                    Notepad.last_match_case_setting = self.find_dialog.match_case_var.get()
+            except tk.TclError:
+                pass
+            finally:
+                self.find_dialog = None
+                self._update_line_formatting()
 
     # --- End Find/Replace Dialog Methods ---
 
@@ -1920,6 +2087,7 @@ class Notepad:
                 # Save settings as key=value pairs
                 f.write(f"reopen_last_file={int(Notepad.reopen_last_file)}\n")
                 f.write(f"match_case={int(Notepad.last_match_case_setting)}\n")
+                f.write(f"auto_match_case_in_selection={int(Notepad.auto_match_case_in_selection)}\n")
                 f.write(f"line_formatting={int(Notepad.line_formatting_enabled)}\n")
                 f.write(f"auto_capitalize_headings={int(Notepad.auto_capitalize_headings)}\n")
                 f.write(f"auto_capitalize_first_word={int(Notepad.auto_capitalize_first_word)}\n")
@@ -1950,6 +2118,8 @@ class Notepad:
                                 Notepad.reopen_last_file = bool(int(value))
                             elif key == "match_case":
                                 Notepad.last_match_case_setting = bool(int(value))
+                            elif key == "auto_match_case_in_selection":
+                                Notepad.auto_match_case_in_selection = bool(int(value))
                             elif key == "line_formatting":
                                 Notepad.line_formatting_enabled = bool(int(value))
                             elif key == "auto_capitalize_headings":
@@ -2339,17 +2509,20 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         self.resizable(False, False)
 
         # --- Initialize all variables at the top ---
-        self.reopen_last_var = tk.BooleanVar(self, value=bool(Notepad.reopen_last_file))
-        self.match_case_var = tk.BooleanVar(self, value=bool(Notepad.last_match_case_setting))
-        self.line_format_var = tk.BooleanVar(self, value=bool(Notepad.line_formatting_enabled))
-        self.auto_capitalize_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_headings))
-        self.auto_capitalize_first_word_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_first_word))
-        self.auto_capitalize_indented_var = tk.BooleanVar(self, value=bool(Notepad.auto_capitalize_indented))
-        self.highlight_enabled_var = tk.BooleanVar(self, value=bool(Notepad.highlight_enabled))
-        self.auto_full_stop_var = tk.BooleanVar(self, value=bool(Notepad.auto_full_stop))
-        self.readonly_mode_var = tk.BooleanVar(self, value=bool(Notepad.readonly_mode))
-        self.default_find_text_var = tk.StringVar(self, value=Notepad.default_find_text)
-        self.default_replace_text_var = tk.StringVar(self, value=Notepad.default_replace_text)
+        self.reopen_last_var = tk.BooleanVar(master=self, value=bool(Notepad.reopen_last_file))
+        self.match_case_var = tk.BooleanVar(master=self, value=bool(Notepad.last_match_case_setting))
+        self.auto_match_case_selection_var = tk.BooleanVar(
+            master=self, value=bool(Notepad.auto_match_case_in_selection)
+        )
+        self.line_format_var = tk.BooleanVar(master=self, value=bool(Notepad.line_formatting_enabled))
+        self.auto_capitalize_var = tk.BooleanVar(master=self, value=bool(Notepad.auto_capitalize_headings))
+        self.auto_capitalize_first_word_var = tk.BooleanVar(master=self, value=bool(Notepad.auto_capitalize_first_word))
+        self.auto_capitalize_indented_var = tk.BooleanVar(master=self, value=bool(Notepad.auto_capitalize_indented))
+        self.highlight_enabled_var = tk.BooleanVar(master=self, value=bool(Notepad.highlight_enabled))
+        self.auto_full_stop_var = tk.BooleanVar(master=self, value=bool(Notepad.auto_full_stop))
+        self.readonly_mode_var = tk.BooleanVar(master=self, value=bool(Notepad.readonly_mode))
+        self.default_find_text_var = tk.StringVar(master=self, value=Notepad.default_find_text)
+        self.default_replace_text_var = tk.StringVar(master=self, value=Notepad.default_replace_text)
 
         # --- Make dialog scrollable ---
         content_frame = ttk.Frame(self)
@@ -2420,12 +2593,19 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
             command=lambda: self._update_checkbox_state(self.match_case_var)
         )
         match_case_check.pack(anchor='w', pady=(0, 2))
+        auto_match_selection_check = ttk.Checkbutton(
+            search_frame,
+            text="Auto-enable Match case for selection searches",
+            variable=self.auto_match_case_selection_var,
+            command=lambda: self._update_checkbox_state(self.auto_match_case_selection_var)
+        )
+        auto_match_selection_check.pack(anchor='w', pady=(0, 2))
         ttk.Label(search_frame, text="Default Find text:").pack(anchor='w', padx=2, pady=(6,0))
-        self.default_find_text_var = tk.StringVar(self, value=Notepad.default_find_text)
+        self.default_find_text_var = tk.StringVar(master=self, value=Notepad.default_find_text)
         default_find_entry = ttk.Entry(search_frame, textvariable=self.default_find_text_var, width=20)
         default_find_entry.pack(anchor='w', padx=2, pady=(0,4))
         ttk.Label(search_frame, text="Default Replace text:").pack(anchor='w', padx=2, pady=(6,0))
-        self.default_replace_text_var = tk.StringVar(self, value=Notepad.default_replace_text)
+        self.default_replace_text_var = tk.StringVar(master=self, value=Notepad.default_replace_text)
         default_replace_entry = ttk.Entry(search_frame, textvariable=self.default_replace_text_var, width=20)
         default_replace_entry.pack(anchor='w', padx=2, pady=(0,2))
 
@@ -2525,6 +2705,7 @@ class SettingsDialog(tk.Toplevel, CenterDialogMixin):
         # Save settings using boolean values
         Notepad.reopen_last_file = bool(self.reopen_last_var.get())
         Notepad.last_match_case_setting = bool(self.match_case_var.get())
+        Notepad.auto_match_case_in_selection = bool(self.auto_match_case_selection_var.get())
         Notepad.line_formatting_enabled = bool(self.line_format_var.get())
         Notepad.auto_capitalize_headings = bool(self.auto_capitalize_var.get())
         Notepad.auto_capitalize_first_word = bool(self.auto_capitalize_first_word_var.get())
