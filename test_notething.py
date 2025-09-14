@@ -52,6 +52,14 @@ class TestNotepad(unittest.TestCase):
         self.app._open_url_or_file(file_path)
         mock_open_in_notething.assert_called_with(file_path)
 
+    @patch('notething_pyw.simpledialog.askstring', return_value='> ')
+    def test_ctrl_i_prepends_text(self, mock_ask):
+        self.app.text_area.insert('1.0', 'one\ntwo\nthree')
+        self.app.text_area.tag_add(tk.SEL, '1.0', '3.0')
+        self.app._handle_ctrl_i(None)
+        result = self.app.text_area.get('1.0', 'end-1c')
+        self.assertEqual(result, '> one\n> two\nthree')
+
 
 class TestFindDialogBehavior(unittest.TestCase):
     def setUp(self):
