@@ -1723,9 +1723,42 @@ class Notepad:
                 self._update_line_formatting()
         finally:
             self.text_area.config(autoseparators=original_autoseparators)
-        
+
         return "break"
     # --- End Tab/Shift-Tab Handlers ---
+
+    # --- Add Ctrl+I Handler for Prepending Text ---
+    def _handle_ctrl_i(self, event=None):
+        """Handle Ctrl+I to prepend text to each selected line."""
+        try:
+            sel_first_idx = self.text_area.index(tk.SEL_FIRST)
+            sel_last_idx = self.text_area.index(tk.SEL_LAST)
+        except tk.TclError:
+            # Nothing selected
+            return "break"
+
+        prefix = simpledialog.askstring("Prepend Text", "Enter text to prepend:", parent=self.root)
+        if prefix is None:
+            return "break"
+
+        start_line = int(sel_first_idx.split('.')[0])
+        end_line = int(self.text_area.index("sel.last-1c").split('.')[0])
+
+        original_autoseparators = self.text_area.cget("autoseparators")
+        self.text_area.config(autoseparators=False)
+        try:
+            for line in range(start_line, end_line + 1):
+                self.text_area.insert(f"{line}.0", prefix)
+            self.text_area.edit_separator()
+        finally:
+            self.text_area.config(autoseparators=original_autoseparators)
+
+        # Reselect the modified block
+        self.text_area.tag_remove(tk.SEL, "1.0", tk.END)
+        self.text_area.tag_add(tk.SEL, f"{start_line}.0", f"{end_line}.end")
+        self.text_area.mark_set(tk.INSERT, f"{end_line}.end")
+        self._update_line_formatting()
+        return "break"
 
     # --- Add Enter Key Handler for Auto-Indentation ---
     def _handle_enter_key(self, event=None):
@@ -1994,10 +2027,13 @@ class Notepad:
         
         # Add Ctrl+Shift+H for highlighting
         self.text_area.bind("<Control-Shift-H>", self._handle_highlight)
-        
+
         # Add explicit Shift+Tab binding
         self.text_area.bind("<Shift-Tab>", self._handle_shift_tab_key)
-        
+
+        # Add Ctrl+I binding for prepending text
+        self.text_area.bind("<Control-i>", self._handle_ctrl_i)
+
         # Suppress default text widget behaviors
         self.text_area.bind("<Control-k>", lambda e: "break")  # Suppress delete to end of line
         self.text_area.bind("<Control-d>", lambda e: "break")  # Suppress delete character

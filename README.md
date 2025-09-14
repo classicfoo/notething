@@ -32,6 +32,7 @@ T Asdfasfa.
 - Find Dialog (Ctrl + F)
 - Find and Replace Dialog (Ctrl + H)
 - Smart Home Key and Selection
+- Prepend text to selected lines (Ctrl + I)
 
 ## Todo
 X Pressing Shift + Home
